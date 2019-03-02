@@ -15,6 +15,7 @@ the MINGW-packages AUR (packages: `mingw-w64-clang`, `mingw-w64-gcc`). These pat
 
 ## GCC/G++ patches:
 
+All of these are patches on the GCC source tarball (i.e. with all frontends included, except D)
 - `pick-libc.patch` (override libc selection: default is Microsoft libc v6.1-7.0, this is used to pick libc v8+ or the new UCRT)
 - `std-fs.patch` (enable `std::experimental::filesystem` for Windows NT targets)
 - `suffix.patch` (some Pascal calling convention fix)
