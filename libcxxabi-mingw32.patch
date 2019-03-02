@@ -1,0 +1,53 @@
+diff --git a/data/llvm-project/libcxxabi/src/fallback_malloc.cpp b/./src/fallback_malloc.cpp
+index 202a467..4642182 100644
+--- a/data/llvm-project/libcxxabi/src/fallback_malloc.cpp
++++ b/./src/fallback_malloc.cpp
+@@ -31,7 +31,7 @@ namespace {
+ 
+ // When POSIX threads are not available, make the mutex operations a nop
+ #ifndef _LIBCXXABI_HAS_NO_THREADS
+-_LIBCPP_SAFE_STATIC
++//_LIBCPP_SAFE_STATIC
+ static std::__libcpp_mutex_t heap_mutex = _LIBCPP_MUTEX_INITIALIZER;
+ #else
+ static void* heap_mutex = 0;
+@@ -207,7 +207,7 @@ struct __attribute__((aligned)) __aligned_type {};
+ 
+ void* __aligned_malloc_with_fallback(size_t size) {
+ #if defined(_WIN32)
+-  if (void* dest = _aligned_malloc(size, alignof(__aligned_type)))
++  if (void* dest = __mingw_aligned_malloc(size, alignof(__aligned_type)))
+     return dest;
+ #elif defined(_LIBCPP_HAS_NO_LIBRARY_ALIGNED_ALLOCATION)
+   if (void* dest = std::malloc(size))
+@@ -238,7 +238,7 @@ void __aligned_free_with_fallback(void* ptr) {
+     fallback_free(ptr);
+   else {
+ #if defined(_WIN32)
+-    ::_aligned_free(ptr);
++    ::__mingw_aligned_free(ptr);
+ #else
+     std::free(ptr);
+ #endif
+diff --git a/data/llvm-project/libcxxabi/src/stdlib_new_delete.cpp b/./src/stdlib_new_delete.cpp
+index bbd90a5..0fc02f3 100644
+--- a/data/llvm-project/libcxxabi/src/stdlib_new_delete.cpp
++++ b/./src/stdlib_new_delete.cpp
+@@ -146,7 +146,7 @@ operator new(std::size_t size, std::align_val_t alignment) _THROW_BAD_ALLOC
+       alignment = std::align_val_t(sizeof(void*));
+     void* p;
+ #if defined(_LIBCPP_WIN32API)
+-    while ((p = _aligned_malloc(size, static_cast<size_t>(alignment))) == nullptr)
++    while ((p = __mingw_aligned_malloc(size, static_cast<size_t>(alignment))) == nullptr)
+ #else
+     while (::posix_memalign(&p, static_cast<size_t>(alignment), size) != 0)
+ #endif
+@@ -219,7 +219,7 @@ operator delete(void* ptr, std::align_val_t) _NOEXCEPT
+ {
+     if (ptr)
+ #if defined(_LIBCPP_WIN32API)
+-        ::_aligned_free(ptr);
++        ::__mingw_aligned_free(ptr);
+ #else
+         ::free(ptr);
+ #endif

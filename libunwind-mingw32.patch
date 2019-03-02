@@ -1,0 +1,25 @@
+diff --git a/../llvm-project/libunwind/src/RWMutex.hpp b/./src/RWMutex.hpp
+index 50a78a5..cca88d9 100644
+--- a/../llvm-project/libunwind/src/RWMutex.hpp
++++ b/./src/RWMutex.hpp
+@@ -14,9 +14,9 @@
+ #ifndef __RWMUTEX_HPP__
+ #define __RWMUTEX_HPP__
+ 
+-#if defined(_WIN32)
++#if defined(_MSC_VER)
+ #include <windows.h>
+-#elif !defined(_LIBUNWIND_HAS_NO_THREADS)
++#elif !defined(_LIBUNWIND_HAS_NO_THREADS) || defined(__MINGW32__)
+ #include <pthread.h>
+ #endif
+ 
+@@ -32,7 +32,7 @@ public:
+   bool unlock() { return true; }
+ };
+ 
+-#elif defined(_WIN32)
++#elif defined(_MSC_VER)
+ 
+ class _LIBUNWIND_HIDDEN RWMutex {
+ public:

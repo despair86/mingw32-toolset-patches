@@ -1,0 +1,408 @@
+diff --git a/lib/Support/CrashRecoveryContext.cpp b/lib/Support/CrashRecoveryContext.cpp
+old mode 100644
+new mode 100755
+index be4b5c3e..7e42ae93
+--- a/lib/Support/CrashRecoveryContext.cpp
++++ b/lib/Support/CrashRecoveryContext.cpp
+@@ -190,6 +190,9 @@ bool CrashRecoveryContext::RunSafely(function_ref<void()> Fn) {
+ #else // !_MSC_VER
+ 
+ #if defined(_WIN32)
++extern "C"{
++#include <pseh/pseh.h>
++}
+ // This is a non-MSVC compiler, probably mingw gcc or clang without
+ // -fms-extensions. Use vectored exception handling (VEH).
+ //
+@@ -211,67 +214,29 @@ bool CrashRecoveryContext::RunSafely(function_ref<void()> Fn) {
+ 
+ #include "Windows/WindowsSupport.h"
+ 
+-static LONG CALLBACK ExceptionHandler(PEXCEPTION_POINTERS ExceptionInfo)
+-{
+-  // DBG_PRINTEXCEPTION_WIDE_C is not properly defined on all supported
+-  // compilers and platforms, so we define it manually.
+-  constexpr ULONG DbgPrintExceptionWideC = 0x4001000AL;
+-  switch (ExceptionInfo->ExceptionRecord->ExceptionCode)
+-  {
+-  case DBG_PRINTEXCEPTION_C:
+-  case DbgPrintExceptionWideC:
+-  case 0x406D1388:  // set debugger thread name
+-    return EXCEPTION_CONTINUE_EXECUTION;
+-  }
+-
+-  // Lookup the current thread local recovery object.
+-  const CrashRecoveryContextImpl *CRCI = CurrentContext->get();
++static void installExceptionOrSignalHandlers() {}
++static void uninstallExceptionOrSignalHandlers() {}
+ 
+-  if (!CRCI) {
+-    // Something has gone horribly wrong, so let's just tell everyone
+-    // to keep searching
+-    CrashRecoveryContext::Disable();
+-    return EXCEPTION_CONTINUE_SEARCH;
++bool CrashRecoveryContext::RunSafely(function_ref<void()> Fn) {
++  if (!gCrashRecoveryEnabled) {
++    Fn();
++    return true;
+   }
+ 
+-  // TODO: We can capture the stack backtrace here and store it on the
+-  // implementation if we so choose.
+-
+-  // Handle the crash
+-  const_cast<CrashRecoveryContextImpl*>(CRCI)->HandleCrash();
+-
+-  // Note that we don't actually get here because HandleCrash calls
+-  // longjmp, which means the HandleCrash function never returns.
+-  llvm_unreachable("Handled the crash, should have longjmp'ed out of here");
+-}
+-
+-// Because the Enable and Disable calls are static, it means that
+-// there may not actually be an Impl available, or even a current
+-// CrashRecoveryContext at all.  So we make use of a thread-local
+-// exception table.  The handles contained in here will either be
+-// non-NULL, valid VEH handles, or NULL.
+-static sys::ThreadLocal<const void> sCurrentExceptionHandle;
+-
+-static void installExceptionOrSignalHandlers() {
+-  // We can set up vectored exception handling now.  We will install our
+-  // handler as the front of the list, though there's no assurances that
+-  // it will remain at the front (another call could install itself before
+-  // our handler).  This 1) isn't likely, and 2) shouldn't cause problems.
+-  PVOID handle = ::AddVectoredExceptionHandler(1, ExceptionHandler);
+-  sCurrentExceptionHandle.set(handle);
+-}
+-
+-static void uninstallExceptionOrSignalHandlers() {
+-  PVOID currentHandle = const_cast<PVOID>(sCurrentExceptionHandle.get());
+-  if (currentHandle) {
+-    // Now we can remove the vectored exception handler from the chain
+-    ::RemoveVectoredExceptionHandler(currentHandle);
++  bool Result = true;
+ 
+-    // Reset the handle in our thread-local set.
+-    sCurrentExceptionHandle.set(NULL);
++  _SEH_TRY 
++  {
++    Fn();
++  } 
++  _SEH_HANDLE 
++  { // Catch any exception.
++    Result = false;
+   }
++  _SEH_END;
++  
++  return Result;
+ }
+-
+ #else // !_WIN32
+ 
+ // Generic POSIX implementation.
+diff --git a/lib/Support/Windows/Path.inc b/lib/Support/Windows/Path.inc
+old mode 100644
+new mode 100755
+index f425d607..fbcc075f
+--- a/lib/Support/Windows/Path.inc
++++ b/lib/Support/Windows/Path.inc
+@@ -348,15 +348,158 @@ std::error_code is_local(const Twine &path, bool &result) {
+   return is_local_internal(WidePath, result);
+ }
+ 
++#define BUFSIZE 512
++#include <psapi.h>
++#include <strsafe.h>
++unsigned __int32 GetFileNameFromHandle(HANDLE hFile, wchar_t* data, unsigned __int32 l, unsigned __int32 f) 
++{
++  wchar_t pszFilename[MAX_PATH+1];
++  HANDLE hFileMap;
++  DWORD l2;
++  (void)f; // the path is already normalised
++
++  // Get the file size.
++  DWORD dwFileSizeHi = 0;
++  DWORD dwFileSizeLo = GetFileSize(hFile, &dwFileSizeHi); 
++
++  if( dwFileSizeLo == 0 && dwFileSizeHi == 0 )
++     return ERROR_INVALID_PARAMETER;
++
++  // Create a file mapping object.
++  hFileMap = CreateFileMapping(hFile, 
++                    nullptr, 
++                    PAGE_READONLY,
++                    0, 
++                    1,
++                    nullptr);
++
++  if (hFileMap) 
++  {
++    // Create a file mapping to get the file name.
++    void* pMem = MapViewOfFile(hFileMap, FILE_MAP_READ, 0, 0, 1);
++
++    if (pMem) 
++    {
++      if (GetMappedFileNameW (GetCurrentProcess(), 
++                             pMem, 
++                             pszFilename,
++                             MAX_PATH)) 
++      {
++
++        // Translate path with device name to drive letters.
++        wchar_t szTemp[BUFSIZE];
++        szTemp[0] = L'\0';
++
++        if (GetLogicalDriveStringsW(BUFSIZE-1, szTemp)) 
++        {
++          wchar_t szName[MAX_PATH];
++          wchar_t szDrive[3] = L" :";
++          BOOL bFound = FALSE;
++          wchar_t* p = szTemp;
++
++          do 
++          {
++            // Copy the drive letter to the template string
++            *szDrive = *p;
++
++            // Look up each device name
++            if (QueryDosDeviceW(szDrive, szName, MAX_PATH))
++            {
++              size_t uNameLen = wcslen(szName);
++
++              if (uNameLen < MAX_PATH) 
++              {
++                bFound = wcsnicmp(pszFilename, szName, uNameLen) == 0
++                         && *(pszFilename + uNameLen) == L'\\';
++
++                if (bFound) 
++                {
++                  // Reconstruct pszFilename using szTempFile
++                  // Replace device path with DOS path
++                  wchar_t szTempFile[MAX_PATH];
++                  StringCchPrintfW(szTempFile,
++                            MAX_PATH,
++                            L"%s%s",
++                            szDrive,
++                            pszFilename+uNameLen);
++                  StringCchCopyNW(pszFilename, MAX_PATH+1, szTempFile, wcslen(szTempFile));
++                }
++		else
++		{
++			UnmapViewOfFile(pMem);
++			CloseHandle(hFileMap);
++			goto NotFound;
++		}
++              }
++	      else
++	      {
++		      UnmapViewOfFile(pMem);
++		      CloseHandle(hFileMap);
++		      goto NoCore;
++	      }
++            }
++	    else
++	    {
++		    UnmapViewOfFile(pMem);
++		    CloseHandle(hFileMap);
++		    goto NotFound;
++	    }
++
++            // Go to the next NULL character.
++            while (*p++);
++          } while (!bFound && *p); // end of string
++        }
++	else
++	{
++		NotFound:
++		return ERROR_PATH_NOT_FOUND;
++	}
++      }
++      else
++      {
++	      UnmapViewOfFile(pMem);
++	      CloseHandle(hFileMap);
++	      goto NoCore;
++      }
++      UnmapViewOfFile(pMem);
++    }
++    else
++    {
++	    CloseHandle(hFileMap);
++	    goto NoCore;
++    } 
++    CloseHandle(hFileMap);
++  }
++  else
++  {
++	  NoCore:
++	  return ERROR_NOT_ENOUGH_MEMORY;
++  }
++
++  l2 = wcslen(pszFilename);
++  
++  if (l > l2)
++  {
++	  wcsncpy(data, pszFilename, l);
++	  data[l2] = L'\0';
++  }
++  else
++  {
++	  return l2+1;
++  }
++
++  return l2;
++}
++
+ static std::error_code realPathFromHandle(HANDLE H,
+                                           SmallVectorImpl<wchar_t> &Buffer) {
+-  DWORD CountChars = ::GetFinalPathNameByHandleW(
++  DWORD CountChars = GetFileNameFromHandle(
+       H, Buffer.begin(), Buffer.capacity() - 1, FILE_NAME_NORMALIZED);
+   if (CountChars > Buffer.capacity()) {
+     // The buffer wasn't big enough, try again.  In this case the return value
+     // *does* indicate the size of the null terminator.
+     Buffer.reserve(CountChars);
+-    CountChars = ::GetFinalPathNameByHandleW(
++    CountChars = GetFileNameFromHandle(
+         H, Buffer.data(), Buffer.capacity() - 1, FILE_NAME_NORMALIZED);
+   }
+   if (CountChars == 0)
+@@ -1255,15 +1398,24 @@ std::error_code real_path(const Twine &path, SmallVectorImpl<char> &dest,
+ namespace path {
+ static bool getKnownFolderPath(KNOWNFOLDERID folderId,
+                                SmallVectorImpl<char> &result) {
+-  wchar_t *path = nullptr;
+-  if (::SHGetKnownFolderPath(folderId, KF_FLAG_CREATE, nullptr, &path) != S_OK)
++  wchar_t path[MAX_PATH];
++  KNOWNFOLDERID tmp = folderId;
++  int csidl = 0;
++
++  if (tmp == FOLDERID_LocalAppData)
++    csidl = CSIDL_LOCAL_APPDATA | CSIDL_FLAG_CREATE;
++  if (tmp == FOLDERID_Profile)
++    csidl = CSIDL_PROFILE | CSIDL_FLAG_CREATE;
++  
++  if (!csidl) // we only return two folders. why the fuck do we pull in any of the other values, we can add them as they come -despair
++    return false;
++  
++  if (::SHGetFolderPathW(nullptr, csidl, nullptr, 0, path) != S_OK)
+     return false;
+ 
+   bool ok = !UTF16ToUTF8(path, ::wcslen(path), result);
+-  ::CoTaskMemFree(path);
+   return ok;
+ }
+-
+ bool getUserCacheDir(SmallVectorImpl<char> &Result) {
+   return getKnownFolderPath(FOLDERID_LocalAppData, Result);
+ }
+diff --git a/lib/Support/Windows/Process.inc b/lib/Support/Windows/Process.inc
+old mode 100644
+new mode 100755
+index 30126568..d31c97e7
+--- a/lib/Support/Windows/Process.inc
++++ b/lib/Support/Windows/Process.inc
+@@ -49,7 +49,7 @@ static unsigned computePageSize() {
+   // GetNativeSystemInfo() provides the physical page size which may differ
+   // from GetSystemInfo() in 32-bit applications running under WOW64.
+   SYSTEM_INFO info;
+-  GetNativeSystemInfo(&info);
++  GetSystemInfo(&info);
+   // FIXME: FileOffset in MapViewOfFile() should be aligned to not dwPageSize,
+   // but dwAllocationGranularity.
+   return static_cast<unsigned>(info.dwPageSize);
+diff --git a/lib/Support/Windows/Signals.inc b/lib/Support/Windows/Signals.inc
+old mode 100644
+new mode 100755
+index 41eb5e59..673a1ec7
+--- a/lib/Support/Windows/Signals.inc
++++ b/lib/Support/Windows/Signals.inc
+@@ -519,8 +519,10 @@ void sys::PrintStackTraceOnErrorSignal(StringRef Argv0,
+ #if defined(__MINGW32__) && !defined(__MINGW64_VERSION_MAJOR)
+ // Provide a prototype for RtlCaptureContext, mingw32 from mingw.org is
+ // missing it but mingw-w64 has it.
++// PATCH(despair): inject win32_misc.s somewhere in the build system
+ extern "C" VOID WINAPI RtlCaptureContext(PCONTEXT ContextRecord);
+ #endif
++extern "C" void FAR PASCAL _RtlCaptureContext(CONTEXT* ContextRecord);
+ 
+ void llvm::sys::PrintStackTrace(raw_ostream &OS) {
+   STACKFRAME64 StackFrame = {};
+@@ -623,14 +625,12 @@ static bool GetDumpFolder(HKEY Key,
+ 
+   DWORD BufferLengthBytes = 0;
+ 
+-  if (ERROR_SUCCESS != ::RegGetValueW(Key, 0, L"DumpFolder", REG_EXPAND_SZ,
+-                                      NULL, NULL, &BufferLengthBytes))
++  if (ERROR_SUCCESS != ::RegQueryValueExW(Key, L"DumpFolder", nullptr, nullptr, nullptr, &BufferLengthBytes))
+     return false;
+ 
+   SmallVector<wchar_t, MAX_PATH> Buffer(BufferLengthBytes);
+ 
+-  if (ERROR_SUCCESS != ::RegGetValueW(Key, 0, L"DumpFolder", REG_EXPAND_SZ,
+-                                      NULL, Buffer.data(), &BufferLengthBytes))
++if (ERROR_SUCCESS != ::RegQueryValueExW(Key, L"DumpFolder", nullptr, nullptr, (BYTE*)Buffer.data(), &BufferLengthBytes))
+     return false;
+ 
+   DWORD ExpandBufferSize = ::ExpandEnvironmentStringsW(Buffer.data(), NULL, 0);
+@@ -670,17 +670,13 @@ static bool GetDumpType(HKEY Key, MINIDUMP_TYPE &ResultType) {
+ 
+   DWORD DumpType;
+   DWORD TypeSize = sizeof(DumpType);
+-  if (ERROR_SUCCESS != ::RegGetValueW(Key, NULL, L"DumpType", RRF_RT_REG_DWORD,
+-                                      NULL, &DumpType,
+-                                      &TypeSize))
++  if (ERROR_SUCCESS != ::RegQueryValueExW(Key, L"DumpType", nullptr, nullptr, (BYTE*)&DumpType, &TypeSize))
+     return false;
+ 
+   switch (DumpType) {
+   case 0: {
+     DWORD Flags = 0;
+-    if (ERROR_SUCCESS != ::RegGetValueW(Key, NULL, L"CustomDumpFlags",
+-                                        RRF_RT_REG_DWORD, NULL, &Flags,
+-                                        &TypeSize))
++    if (ERROR_SUCCESS != ::RegQueryValueExW(Key, L"CustomDumpFlags", nullptr, nullptr, (BYTE*)&Flags, &TypeSize))
+       return false;
+ 
+     ResultType = static_cast<MINIDUMP_TYPE>(Flags);
+diff --git a/lib/Target/X86/X86ISelLowering.cpp b/lib/Target/X86/X86ISelLowering.cpp
+old mode 100644
+new mode 100755
+index 2820004c..e9fa4ab3
+--- a/lib/Target/X86/X86ISelLowering.cpp
++++ b/lib/Target/X86/X86ISelLowering.cpp
+@@ -2125,8 +2125,9 @@ Value *X86TargetLowering::getIRStackGuard(IRBuilder<> &IRB) const {
+ 
+ void X86TargetLowering::insertSSPDeclarations(Module &M) const {
+   // MSVC CRT provides functionalities for stack protection.
+-  if (Subtarget.getTargetTriple().isWindowsMSVCEnvironment() ||
+-      Subtarget.getTargetTriple().isWindowsItaniumEnvironment()) {
++  if ((Subtarget.getTargetTriple().isWindowsMSVCEnvironment() ||
++      Subtarget.getTargetTriple().isWindowsItaniumEnvironment()) &&
++	  !Subtarget.isTargetWindowsGNU()) {
+     // MSVC CRT has a global variable holding security cookie.
+     M.getOrInsertGlobal("__security_cookie",
+                         Type::getInt8PtrTy(M.getContext()));
+@@ -2148,8 +2149,9 @@ void X86TargetLowering::insertSSPDeclarations(Module &M) const {
+ 
+ Value *X86TargetLowering::getSDagStackGuard(const Module &M) const {
+   // MSVC CRT has a global variable holding security cookie.
+-  if (Subtarget.getTargetTriple().isWindowsMSVCEnvironment() ||
+-      Subtarget.getTargetTriple().isWindowsItaniumEnvironment()) {
++  if ((Subtarget.getTargetTriple().isWindowsMSVCEnvironment() ||
++      Subtarget.getTargetTriple().isWindowsItaniumEnvironment()) &&
++	  !Subtarget.isTargetWindowsGNU()) {
+     return M.getGlobalVariable("__security_cookie");
+   }
+   return TargetLowering::getSDagStackGuard(M);
+@@ -2157,8 +2159,9 @@ Value *X86TargetLowering::getSDagStackGuard(const Module &M) const {
+ 
+ Value *X86TargetLowering::getSSPStackGuardCheck(const Module &M) const {
+   // MSVC CRT has a function to validate security cookie.
+-  if (Subtarget.getTargetTriple().isWindowsMSVCEnvironment() ||
+-      Subtarget.getTargetTriple().isWindowsItaniumEnvironment()) {
++  if ((Subtarget.getTargetTriple().isWindowsMSVCEnvironment() ||
++      Subtarget.getTargetTriple().isWindowsItaniumEnvironment()) &&
++	  !Subtarget.isTargetWindowsGNU()) {
+     return M.getFunction("__security_check_cookie");
+   }
+   return TargetLowering::getSSPStackGuardCheck(M);

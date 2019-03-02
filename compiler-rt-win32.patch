@@ -1,0 +1,83 @@
+diff --git a/lib/builtins/emutls.c b/lib/builtins/emutls.c
+old mode 100644
+new mode 100755
+index 07d436e..3a92981
+--- a/lib/builtins/emutls.c
++++ b/lib/builtins/emutls.c
+@@ -130,6 +130,7 @@ static __inline void emutls_unlock() {
+ #include <malloc.h>
+ #include <stdio.h>
+ #include <assert.h>
++#include <pthread.h>
+ 
+ static LPCRITICAL_SECTION emutls_mutex;
+ static DWORD emutls_tls_index = TLS_OUT_OF_INDEXES;
+@@ -156,20 +157,20 @@ static __inline void win_abort(DWORD last_err, const char *hint) {
+ }
+ 
+ static __inline void *emutls_memalign_alloc(size_t align, size_t size) {
+-    void *base = _aligned_malloc(size, align);
++    void *base = __mingw_aligned_malloc(size, align);
+     if (!base)
+-        win_abort(GetLastError(), "_aligned_malloc");
++        win_abort(GetLastError(), "__mingw_aligned_malloc");
+     return base;
+ }
+ 
+ static __inline void emutls_memalign_free(void *base) {
+-    _aligned_free(base);
++    __mingw_aligned_free(base);
+ }
+ 
+ static void emutls_exit(void) {
+     if (emutls_mutex) {
+         DeleteCriticalSection(emutls_mutex);
+-        _aligned_free(emutls_mutex);
++        __mingw_aligned_free(emutls_mutex);
+         emutls_mutex = NULL;
+     }
+     if (emutls_tls_index != TLS_OUT_OF_INDEXES) {
+@@ -179,12 +180,13 @@ static void emutls_exit(void) {
+     }
+ }
+ 
++#ifdef _MSC_VER
+ #pragma warning (push)
+ #pragma warning (disable : 4100)
+ static BOOL CALLBACK emutls_init(PINIT_ONCE p0, PVOID p1, PVOID *p2) {
+-    emutls_mutex = (LPCRITICAL_SECTION)_aligned_malloc(sizeof(CRITICAL_SECTION), 16);
++    emutls_mutex = (LPCRITICAL_SECTION)__mingw_aligned_malloc(sizeof(CRITICAL_SECTION), 16);
+     if (!emutls_mutex) {
+-        win_error(GetLastError(), "_aligned_malloc");
++        win_error(GetLastError(), "__mingw_aligned_malloc");
+         return FALSE;
+     }
+     InitializeCriticalSection(emutls_mutex);
+@@ -203,6 +205,27 @@ static __inline void emutls_init_once(void) {
+     static INIT_ONCE once;
+     InitOnceExecuteOnce(&once, emutls_init, NULL, NULL);
+ }
++#else
++static __inline void emutls_init(void) {
++    emutls_mutex = (LPCRITICAL_SECTION)__mingw_aligned_malloc(sizeof(CRITICAL_SECTION), 16);
++    if (!emutls_mutex) {
++        win_abort(GetLastError(), "__mingw_aligned_malloc");
++    }
++    InitializeCriticalSection(emutls_mutex);
++
++    emutls_tls_index = TlsAlloc();
++    if (emutls_tls_index == TLS_OUT_OF_INDEXES) {
++        emutls_exit();
++        win_abort(GetLastError(), "TlsAlloc");
++    }
++    atexit(&emutls_exit);
++}
++
++static __inline void emutls_init_once(void) {
++    static pthread_once_t once = PTHREAD_ONCE_INIT;
++    pthread_once(&once, emutls_init);
++}
++#endif
+ 
+ static __inline void emutls_lock() {
+     EnterCriticalSection(emutls_mutex);
