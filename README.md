@@ -6,7 +6,7 @@ the MINGW-packages AUR (packages: `mingw-w64-clang`, `mingw-w64-gcc`)
 ## llvm patches:
 
 - `compiler-rt-win32.patch` (Use pthread with non-Microsoft C)
-~~- `fix-static-libg++-clang.patch`~~ (no longer needed, but retained in upstream AUR for whatever reason)
+- ~~`fix-static-libg++-clang.patch`~~ (no longer needed, but retained in upstream AUR for whatever reason)
 - `libcxxabi-mingw32.patch` (use pthread with non-Microsoft C++)
 - `libunwind-mingw32.patch` (use pthread with non-Microsoft C++)
 - `llvm-win32-v7.patch` (LLVM v7.x: use ProPolice SSP on non-Microsoft C/Windows NT target, various Windows XP bits, and use pseh from ReactOS if using GCC)
