@@ -9,6 +9,9 @@ _text segment public 'CODE'
 assume cs:_text
 assume es:nothing, ss:nothing, ds:_data, fs:nothing, gs:nothing
 
+; Yes, the undecorated form of this contains an extra underscore
+; to avoid conflicting with translation units that are able to
+; import the "real" API entry
 public __RtlCaptureContext@4
 __RtlCaptureContext@4 proc near
 
