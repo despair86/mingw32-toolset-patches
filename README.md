@@ -1,5 +1,7 @@
 # patches for various components of mingw-w64 toolset
 
+a lot of my internal/personal projects tend to have `nearly every Windows NT PC in existence`. to wit, i have made a collection of patches over time, and are being released to support reproducible builds for https://github.com/loki-project/loki-network on Windows; this is part of the toolchain i have proposed for release engineering there. Incidentally, these patches mostly affect the 32-bit port, but some are generic enough that the 64-bit build is non-materially affected by the changes (i.e. physical image contents are different, but have no observable effect on a 64-bit build)
+
 `fix-static-libg++-clang.patch`, `pick-libc.patch`, `std-fs.patch`, `suffix.patch` are imported from
 the MINGW-packages AUR (packages: `mingw-w64-clang`, `mingw-w64-gcc`). These patches are applied to the top-level directory of their respective archives.
 
