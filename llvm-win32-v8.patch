@@ -370,30 +370,6 @@ new mode 100755
 index 2820004c..e9fa4ab3
 --- a/lib/Target/X86/X86ISelLowering.cpp
 +++ b/lib/Target/X86/X86ISelLowering.cpp
-@@ -2125,8 +2125,9 @@ Value *X86TargetLowering::getIRStackGuard(IRBuilder<> &IRB) const {
- 
- void X86TargetLowering::insertSSPDeclarations(Module &M) const {
-   // MSVC CRT provides functionalities for stack protection.
--  if (Subtarget.getTargetTriple().isWindowsMSVCEnvironment() ||
--      Subtarget.getTargetTriple().isWindowsItaniumEnvironment()) {
-+  if ((Subtarget.getTargetTriple().isWindowsMSVCEnvironment() ||
-+      Subtarget.getTargetTriple().isWindowsItaniumEnvironment()) &&
-+	  !Subtarget.isTargetWindowsGNU()) {
-     // MSVC CRT has a global variable holding security cookie.
-     M.getOrInsertGlobal("__security_cookie",
-                         Type::getInt8PtrTy(M.getContext()));
-@@ -2148,8 +2149,9 @@ void X86TargetLowering::insertSSPDeclarations(Module &M) const {
- 
- Value *X86TargetLowering::getSDagStackGuard(const Module &M) const {
-   // MSVC CRT has a global variable holding security cookie.
--  if (Subtarget.getTargetTriple().isWindowsMSVCEnvironment() ||
--      Subtarget.getTargetTriple().isWindowsItaniumEnvironment()) {
-+  if ((Subtarget.getTargetTriple().isWindowsMSVCEnvironment() ||
-+      Subtarget.getTargetTriple().isWindowsItaniumEnvironment()) &&
-+	  !Subtarget.isTargetWindowsGNU()) {
-     return M.getGlobalVariable("__security_cookie");
-   }
-   return TargetLowering::getSDagStackGuard(M);
 @@ -2157,8 +2159,9 @@ Value *X86TargetLowering::getSDagStackGuard(const Module &M) const {
  
  Value *X86TargetLowering::getSSPStackGuardCheck(const Module &M) const {
