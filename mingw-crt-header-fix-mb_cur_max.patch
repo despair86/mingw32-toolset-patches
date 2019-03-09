@@ -1,0 +1,49 @@
+diff --git a/mingw-w64-headers/crt/ctype.h b/mingw-w64-headers/crt/ctype.h
+index a85ad96..5777621 100644
+--- a/mingw-w64-headers/crt/ctype.h
++++ b/mingw-w64-headers/crt/ctype.h
+@@ -197,15 +197,13 @@ int __cdecl iswblank(wint_t _C);
+ #ifndef __mb_cur_max
+ #ifdef _MSVCRT_
+   extern int __mb_cur_max;
+-#define __mb_cur_max	__mb_cur_max
++#define __mb_cur_max   __mb_cur_max
+ #else
+-#if __MSVCRT_VERSION__ < 0x1400
+   extern int * __MINGW_IMP_SYMBOL(__mb_cur_max);
++#define __mb_cur_max    (* __MINGW_IMP_SYMBOL(__mb_cur_max))
+ #endif
+-#define __mb_cur_max	(___mb_cur_max_func())
+ #endif
+-#endif
+-_CRTIMP int __cdecl ___mb_cur_max_func(void);
++#define ___mb_cur_max_func() (__mb_cur_max)
+ #endif
+ 
+ #define __chvalidchk(a,b) (__PCTYPE_FUNC[(unsigned char)(a)] & (b))
+diff --git a/mingw-w64-headers/crt/stdlib.h b/mingw-w64-headers/crt/stdlib.h
+index 4d9c1d9..1f65cd5 100644
+--- a/mingw-w64-headers/crt/stdlib.h
++++ b/mingw-w64-headers/crt/stdlib.h
+@@ -108,16 +108,14 @@ extern "C" {
+ #define MB_CUR_MAX ___mb_cur_max_func()
+ #ifndef __mb_cur_max
+ #ifdef _MSVCRT_
+-  extern int __mb_cur_max;
+-#define __mb_cur_max	__mb_cur_max
++    extern int __mb_cur_max;
++#define __mb_cur_max   __mb_cur_max
+ #else
+-#if __MSVCRT_VERSION__ < 0x1400
+-  extern int * __MINGW_IMP_SYMBOL(__mb_cur_max);
++    extern int * __MINGW_IMP_SYMBOL(__mb_cur_max);
++#define __mb_cur_max    (* __MINGW_IMP_SYMBOL(__mb_cur_max))
+ #endif
+-#define __mb_cur_max	(___mb_cur_max_func())
+ #endif
+-#endif
+-_CRTIMP int __cdecl ___mb_cur_max_func(void);
++#define ___mb_cur_max_func() (__mb_cur_max)
+ #endif
+ 
+ #define __max(a,b) (((a) > (b)) ? (a) : (b))

@@ -24,5 +24,10 @@ the MINGW-packages AUR (packages: `mingw-w64-clang`, `mingw-w64-gcc`). These pat
 All of these are patches on the GCC source tarball (i.e. with all frontends included, except D). Internally, I have abandoned GCC for LLVM, except for `libstdc++-v6` (Apple `libc++` is linked to the UCRT, which imposes a separate runtime deliverable.), so this section is mostly of public interest.
 - `pick-libc.patch` (override libc selection: default is Microsoft libc v6.1-7.0, this is used to pick libc v8+ or the new UCRT)
 - `std-fs.patch` (enable `std::experimental::filesystem` for Windows NT targets)
+- `std-fs-gcc-8.3.0.patch` (same as above, but rebased on GCC 8.3 release)
 - `suffix.patch` (some Pascal calling convention fix)
-- `libg++-win32.patch` (patch held over since g++ 6.x)
+- `libg++-win32.patch` (patch held over since g++ 5.x)
+
+## mingw-w64 runtime/CRT patches:
+
+- `mingw-crt-header-fix-mb_cur_max.patch` Revert UCRT fix for `__mb_cur_max`/`__mb_cur_max_func()` (I do not impose extra runtime dep on UCRT)
