@@ -1,9 +1,9 @@
-diff --git a/lib/Support/CrashRecoveryContext.cpp b/lib/Support/CrashRecoveryContext.cpp
+diff --git a/llvm/lib/Support/CrashRecoveryContext.cpp b/llvm/lib/Support/CrashRecoveryContext.cpp
 old mode 100644
 new mode 100755
-index be4b5c3e..7e42ae93
---- a/lib/Support/CrashRecoveryContext.cpp
-+++ b/lib/Support/CrashRecoveryContext.cpp
+index be4b5c3e01c..7e42ae9315a
+--- a/llvm/lib/Support/CrashRecoveryContext.cpp
++++ b/llvm/lib/Support/CrashRecoveryContext.cpp
 @@ -190,6 +190,9 @@ bool CrashRecoveryContext::RunSafely(function_ref<void()> Fn) {
  #else // !_MSC_VER
  
@@ -99,12 +99,12 @@ index be4b5c3e..7e42ae93
  #else // !_WIN32
  
  // Generic POSIX implementation.
-diff --git a/lib/Support/Windows/Path.inc b/lib/Support/Windows/Path.inc
+diff --git a/llvm/lib/Support/Windows/Path.inc b/llvm/lib/Support/Windows/Path.inc
 old mode 100644
 new mode 100755
-index f425d607..fbcc075f
---- a/lib/Support/Windows/Path.inc
-+++ b/lib/Support/Windows/Path.inc
+index f425d607af4..fbcc075ff25
+--- a/llvm/lib/Support/Windows/Path.inc
++++ b/llvm/lib/Support/Windows/Path.inc
 @@ -348,15 +348,158 @@ std::error_code is_local(const Twine &path, bool &result) {
    return is_local_internal(WidePath, result);
  }
@@ -295,12 +295,12 @@ index f425d607..fbcc075f
  bool getUserCacheDir(SmallVectorImpl<char> &Result) {
    return getKnownFolderPath(FOLDERID_LocalAppData, Result);
  }
-diff --git a/lib/Support/Windows/Process.inc b/lib/Support/Windows/Process.inc
+diff --git a/llvm/lib/Support/Windows/Process.inc b/llvm/lib/Support/Windows/Process.inc
 old mode 100644
 new mode 100755
-index 30126568..d31c97e7
---- a/lib/Support/Windows/Process.inc
-+++ b/lib/Support/Windows/Process.inc
+index 30126568769..d31c97e7467
+--- a/llvm/lib/Support/Windows/Process.inc
++++ b/llvm/lib/Support/Windows/Process.inc
 @@ -49,7 +49,7 @@ static unsigned computePageSize() {
    // GetNativeSystemInfo() provides the physical page size which may differ
    // from GetSystemInfo() in 32-bit applications running under WOW64.
@@ -310,12 +310,12 @@ index 30126568..d31c97e7
    // FIXME: FileOffset in MapViewOfFile() should be aligned to not dwPageSize,
    // but dwAllocationGranularity.
    return static_cast<unsigned>(info.dwPageSize);
-diff --git a/lib/Support/Windows/Signals.inc b/lib/Support/Windows/Signals.inc
+diff --git a/llvm/lib/Support/Windows/Signals.inc b/llvm/lib/Support/Windows/Signals.inc
 old mode 100644
 new mode 100755
-index 41eb5e59..673a1ec7
---- a/lib/Support/Windows/Signals.inc
-+++ b/lib/Support/Windows/Signals.inc
+index 41eb5e593aa..673a1ec7ab9
+--- a/llvm/lib/Support/Windows/Signals.inc
++++ b/llvm/lib/Support/Windows/Signals.inc
 @@ -519,8 +519,10 @@ void sys::PrintStackTraceOnErrorSignal(StringRef Argv0,
  #if defined(__MINGW32__) && !defined(__MINGW64_VERSION_MAJOR)
  // Provide a prototype for RtlCaptureContext, mingw32 from mingw.org is
@@ -364,13 +364,11 @@ index 41eb5e59..673a1ec7
        return false;
  
      ResultType = static_cast<MINIDUMP_TYPE>(Flags);
-diff --git a/lib/Target/X86/X86ISelLowering.cpp b/lib/Target/X86/X86ISelLowering.cpp
-old mode 100644
-new mode 100755
-index 2820004c..e9fa4ab3
---- a/lib/Target/X86/X86ISelLowering.cpp
-+++ b/lib/Target/X86/X86ISelLowering.cpp
-@@ -2157,8 +2159,9 @@ Value *X86TargetLowering::getSDagStackGuard(const Module &M) const {
+diff --git a/llvm/lib/Target/X86/X86ISelLowering.cpp b/llvm/lib/Target/X86/X86ISelLowering.cpp
+index 67a127fe0a2..5785878592b 100644
+--- a/llvm/lib/Target/X86/X86ISelLowering.cpp
++++ b/llvm/lib/Target/X86/X86ISelLowering.cpp
+@@ -2157,8 +2157,10 @@ Value *X86TargetLowering::getSDagStackGuard(const Module &M) const {
  
  Value *X86TargetLowering::getSSPStackGuardCheck(const Module &M) const {
    // MSVC CRT has a function to validate security cookie.
@@ -379,7 +377,7 @@ index 2820004c..e9fa4ab3
 +  // We have the stack cookie in GNU mode, but *not* the check function
 +  if ((Subtarget.getTargetTriple().isWindowsMSVCEnvironment() ||
 +      Subtarget.getTargetTriple().isWindowsItaniumEnvironment()) &&
-+	  !Subtarget.isTargetWindowsGNU()) {
++		 !Subtarget.isTargetWindowsGNU()) {
      return M.getFunction("__security_check_cookie");
    }
    return TargetLowering::getSSPStackGuardCheck(M);
