@@ -34,3 +34,4 @@ All of these are patches on the GCC source tarball (i.e. with all frontends incl
 
 - `mingw-w64-v6.patch` Revert UCRT fix for `__mb_cur_max`/`__mb_cur_max_func()` (I do not impose extra runtime dep on UCRT), patch pthread to use reactos SEH, fix reactos DDK header
   - Note: PSEH only compiles with GCC! Use `-fno-ident` to avoid leaking multiple copies of the compiler ID string.
+  - A binary copy is included for bootstrapping; combine this with `libmingw32.a` to avoid specifiying `-lpseh` on the link line.
