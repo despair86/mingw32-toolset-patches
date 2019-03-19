@@ -31,4 +31,5 @@ All of these are patches on the GCC source tarball (i.e. with all frontends incl
 
 ## mingw-w64 runtime/CRT patches:
 
-- `mingw-crt-header-fix-mb_cur_max.patch` Revert UCRT fix for `__mb_cur_max`/`__mb_cur_max_func()` (I do not impose extra runtime dep on UCRT)
+- `mingw-w64-v6.patch` Revert UCRT fix for `__mb_cur_max`/`__mb_cur_max_func()`, patch pthread to use reactos seh emulation (I do not impose extra runtime dep on UCRT)
+  - Note: PSEH only compiles with GCC! Use `-fno-ident` to avoid leaking multiple copies of the compiler ID string.

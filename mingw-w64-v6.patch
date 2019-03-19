@@ -1,0 +1,131 @@
+diff --git a/mingw-w64-v6.0.0/mingw-w64-headers/crt/ctype.h b/mingw-w64-v6.0.0-patched/mingw-w64-headers/crt/ctype.h
+index a85ad96..5777621 100644
+--- a/mingw-w64-v6.0.0/mingw-w64-headers/crt/ctype.h
++++ b/mingw-w64-v6.0.0-patched/mingw-w64-headers/crt/ctype.h
+@@ -197,15 +197,13 @@ int __cdecl iswblank(wint_t _C);
+ #ifndef __mb_cur_max
+ #ifdef _MSVCRT_
+   extern int __mb_cur_max;
+-#define __mb_cur_max	__mb_cur_max
++#define __mb_cur_max   __mb_cur_max
+ #else
+-#if __MSVCRT_VERSION__ < 0x1400
+   extern int * __MINGW_IMP_SYMBOL(__mb_cur_max);
++#define __mb_cur_max    (* __MINGW_IMP_SYMBOL(__mb_cur_max))
+ #endif
+-#define __mb_cur_max	(___mb_cur_max_func())
+ #endif
+-#endif
+-_CRTIMP int __cdecl ___mb_cur_max_func(void);
++#define ___mb_cur_max_func() (__mb_cur_max)
+ #endif
+ 
+ #define __chvalidchk(a,b) (__PCTYPE_FUNC[(unsigned char)(a)] & (b))
+diff --git a/mingw-w64-v6.0.0/mingw-w64-headers/crt/stdlib.h b/mingw-w64-v6.0.0-patched/mingw-w64-headers/crt/stdlib.h
+index 4d9c1d9..1f65cd5 100644
+--- a/mingw-w64-v6.0.0/mingw-w64-headers/crt/stdlib.h
++++ b/mingw-w64-v6.0.0-patched/mingw-w64-headers/crt/stdlib.h
+@@ -108,16 +108,14 @@ extern "C" {
+ #define MB_CUR_MAX ___mb_cur_max_func()
+ #ifndef __mb_cur_max
+ #ifdef _MSVCRT_
+-  extern int __mb_cur_max;
+-#define __mb_cur_max	__mb_cur_max
++    extern int __mb_cur_max;
++#define __mb_cur_max   __mb_cur_max
+ #else
+-#if __MSVCRT_VERSION__ < 0x1400
+-  extern int * __MINGW_IMP_SYMBOL(__mb_cur_max);
++    extern int * __MINGW_IMP_SYMBOL(__mb_cur_max);
++#define __mb_cur_max    (* __MINGW_IMP_SYMBOL(__mb_cur_max))
+ #endif
+-#define __mb_cur_max	(___mb_cur_max_func())
+ #endif
+-#endif
+-_CRTIMP int __cdecl ___mb_cur_max_func(void);
++#define ___mb_cur_max_func() (__mb_cur_max)
+ #endif
+ 
+ #define __max(a,b) (((a) > (b)) ? (a) : (b))
+diff --git a/mingw-w64-v6.0.0/mingw-w64-libraries/winpthreads/src/thread.c b/mingw-w64-v6.0.0-patched/mingw-w64-libraries/winpthreads/src/thread.c
+index 2b7c7be..9734c58 100644
+--- a/mingw-w64-v6.0.0/mingw-w64-libraries/winpthreads/src/thread.c
++++ b/mingw-w64-v6.0.0-patched/mingw-w64-libraries/winpthreads/src/thread.c
+@@ -30,6 +30,7 @@
+ #include "thread.h"
+ #include "misc.h"
+ #include "winpthread_internal.h"
++#include <pseh/pseh.h>
+ 
+ static _pthread_v *__pthread_self_lite (void);
+ 
+@@ -54,20 +55,6 @@ static size_t idListCnt = 0;
+ static size_t idListMax = 0;
+ static pthread_t idListNextId = 0;
+ 
+-#if !defined(_MSC_VER) || defined (USE_VEH_FOR_MSC_SETTHREADNAME)
+-static void *SetThreadName_VEH_handle = NULL;
+-
+-static LONG __stdcall
+-SetThreadName_VEH (PEXCEPTION_POINTERS ExceptionInfo)
+-{
+-  if (ExceptionInfo->ExceptionRecord != NULL &&
+-      ExceptionInfo->ExceptionRecord->ExceptionCode == EXCEPTION_SET_THREAD_NAME)
+-    return EXCEPTION_CONTINUE_EXECUTION;
+-
+-  return EXCEPTION_CONTINUE_SEARCH;
+-}
+-#endif
+-
+ typedef struct _THREADNAME_INFO
+ {
+   DWORD  dwType;	/* must be 0x1000 */
+@@ -89,23 +76,14 @@ SetThreadName (DWORD dwThreadID, LPCSTR szThreadName)
+ 
+    infosize = sizeof (info) / sizeof (ULONG_PTR);
+ 
+-#if defined(_MSC_VER) && !defined (USE_VEH_FOR_MSC_SETTHREADNAME)
+-   __try
++   _SEH_TRY
+      {
+        RaiseException (EXCEPTION_SET_THREAD_NAME, 0, infosize, (ULONG_PTR *)&info);
+      }
+-   __except (EXCEPTION_EXECUTE_HANDLER)
++   _SEH_HANDLE
+      {
+      }
+-#else
+-   /* Without a debugger we *must* have an exception handler,
+-    * otherwise raising an exception will crash the process.
+-    */
+-   if ((!IsDebuggerPresent ()) && (SetThreadName_VEH_handle == NULL))
+-     return;
+-
+-   RaiseException (EXCEPTION_SET_THREAD_NAME, 0, infosize, (ULONG_PTR *) &info);
+-#endif
++   _SEH_END;
+ }
+ 
+ /* Search the list idList for an element with identifier ID.  If
+@@ -419,21 +397,10 @@ __dyn_tls_pthread (HANDLE hDllHandle, DWORD dwReason, LPVOID lpreserved)
+ 
+   if (dwReason == DLL_PROCESS_DETACH)
+     {
+-#if !defined(_MSC_VER) || defined (USE_VEH_FOR_MSC_SETTHREADNAME)
+-      if (lpreserved == NULL && SetThreadName_VEH_handle != NULL)
+-        {
+-          RemoveVectoredExceptionHandler (SetThreadName_VEH_handle);
+-          SetThreadName_VEH_handle = NULL;
+-        }
+-#endif
+       free_pthread_mem ();
+     }
+   else if (dwReason == DLL_PROCESS_ATTACH)
+     {
+-#if !defined(_MSC_VER) || defined (USE_VEH_FOR_MSC_SETTHREADNAME)
+-      SetThreadName_VEH_handle = AddVectoredExceptionHandler (1, &SetThreadName_VEH);
+-      /* Can't do anything on error anyway, check for NULL later */
+-#endif
+     }
+   else if (dwReason == DLL_THREAD_DETACH)
+     {
