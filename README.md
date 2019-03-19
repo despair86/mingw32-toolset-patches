@@ -14,6 +14,7 @@ the MINGW-packages AUR (packages: `mingw-w64-clang`, `mingw-w64-gcc`). These pat
 - `libcxxabi-mingw32.patch` (use pthread with non-Microsoft C++)
 - `libunwind-mingw32.patch` (use pthread with non-Microsoft C++)
 - `llvm-win32-v7.patch` (LLVM v7.x: use ProPolice SSP on non-Microsoft C/Windows NT target, various Windows XP bits, and use [pseh](https://sourceforge.net/p/mingw-w64/mingw-w64/ci/master/tree/mingw-w64-libraries/pseh/) from ReactOS if llvm is compiled with GCC)
+- `llvm-v7-with-solaris.patch` - (Same as above, but with type casting fixes for floating-point functions. These should be harmless on other platforms. Also patches LLD v7. This patch may supersede the patch above.)
 - `llvm-win32-v8.patch` (like v7, rebased on LLVM v8-pre RC3)
 - `llvm-trunk-with-solaris.patch` (LLVM v8-v9 trunk with patches for a Solaris host. Assumes you are using a custom GCC or Clang paired with the GNU ld or gold, vendor provided GCC is paired with the brain-dead Oracle linker)
    - Note: This patch will be frequently rebased on SVN trunk

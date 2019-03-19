@@ -1,0 +1,642 @@
+diff --git a/llvm-7.0.1.src/cmake/modules/AddLLVM.cmake b/llvm-patched/cmake/modules/AddLLVM.cmake
+index ce2057f..b575552 100644
+--- a/llvm-7.0.1.src/cmake/modules/AddLLVM.cmake
++++ b/llvm-patched/cmake/modules/AddLLVM.cmake
+@@ -220,7 +220,7 @@ function(add_link_opts target_name)
+                      LINK_FLAGS " -Wl,-dead_strip")
+       elseif(${CMAKE_SYSTEM_NAME} MATCHES "SunOS")
+         set_property(TARGET ${target_name} APPEND_STRING PROPERTY
+-                     LINK_FLAGS " -Wl,-z -Wl,discard-unused=sections")
++                     LINK_FLAGS " -z ignore")
+       elseif(NOT WIN32 AND NOT LLVM_LINKER_IS_GOLD AND NOT ${CMAKE_SYSTEM_NAME} MATCHES "OpenBSD")
+         # Object files are compiled with -ffunction-data-sections.
+         # Versions of bfd ld < 2.23.1 have a bug in --gc-sections that breaks
+diff --git a/llvm-7.0.1.src/lib/Analysis/BasicAliasAnalysis.cpp b/llvm-patched/lib/Analysis/BasicAliasAnalysis.cpp
+index f9ecbc0..c04a44f 100644
+--- a/llvm-7.0.1.src/lib/Analysis/BasicAliasAnalysis.cpp
++++ b/llvm-patched/lib/Analysis/BasicAliasAnalysis.cpp
+@@ -1896,14 +1896,14 @@ bool BasicAAResult::constantOffsetHeuristic(
+   // the minimum distance between %i and %i + 5 is 3.
+   APInt MinDiff = V0Offset - V1Offset, Wrapped = -MinDiff;
+   MinDiff = APIntOps::umin(MinDiff, Wrapped);
+-  uint64_t MinDiffBytes = MinDiff.getZExtValue() * std::abs(Var0.Scale);
++  uint64_t MinDiffBytes = MinDiff.getZExtValue() * std::abs((long double)Var0.Scale);
+ 
+   // We can't definitely say whether GEP1 is before or after V2 due to wrapping
+   // arithmetic (i.e. for some values of GEP1 and V2 GEP1 < V2, and for other
+   // values GEP1 > V2). We'll therefore only declare NoAlias if both V1Size and
+   // V2Size can fit in the MinDiffBytes gap.
+-  return V1Size + std::abs(BaseOffset) <= MinDiffBytes &&
+-         V2Size + std::abs(BaseOffset) <= MinDiffBytes;
++  return V1Size + std::abs((long double)BaseOffset) <= MinDiffBytes &&
++         V2Size + std::abs((long double)BaseOffset) <= MinDiffBytes;
+ }
+ 
+ //===----------------------------------------------------------------------===//
+diff --git a/llvm-7.0.1.src/lib/Analysis/LoopAccessAnalysis.cpp b/llvm-patched/lib/Analysis/LoopAccessAnalysis.cpp
+index a24d660..2cd913e 100644
+--- a/llvm-7.0.1.src/lib/Analysis/LoopAccessAnalysis.cpp
++++ b/llvm-patched/lib/Analysis/LoopAccessAnalysis.cpp
+@@ -1475,7 +1475,7 @@ MemoryDepChecker::isDependent(const MemAccessInfo &A, unsigned AIdx,
+   Type *BTy = BPtr->getType()->getPointerElementType();
+   auto &DL = InnermostLoop->getHeader()->getModule()->getDataLayout();
+   uint64_t TypeByteSize = DL.getTypeAllocSize(ATy);
+-  uint64_t Stride = std::abs(StrideAPtr);
++  uint64_t Stride = std::abs((long double)StrideAPtr);
+   const SCEVConstant *C = dyn_cast<SCEVConstant>(Dist);
+   if (!C) {
+     if (TypeByteSize == DL.getTypeAllocSize(BTy) &&
+@@ -1493,8 +1493,8 @@ MemoryDepChecker::isDependent(const MemAccessInfo &A, unsigned AIdx,
+   int64_t Distance = Val.getSExtValue();
+ 
+   // Attempt to prove strided accesses independent.
+-  if (std::abs(Distance) > 0 && Stride > 1 && ATy == BTy &&
+-      areStridedAccessesIndependent(std::abs(Distance), Stride, TypeByteSize)) {
++  if (std::abs((long double)Distance) > 0 && Stride > 1 && ATy == BTy &&
++      areStridedAccessesIndependent(std::abs((long double)Distance), Stride, TypeByteSize)) {
+     LLVM_DEBUG(dbgs() << "LAA: Strided accesses are independent\n");
+     return Dependence::NoDep;
+   }
+diff --git a/llvm-7.0.1.src/lib/CodeGen/MachineBasicBlock.cpp b/llvm-patched/lib/CodeGen/MachineBasicBlock.cpp
+index 38e8369..7178e18 100644
+--- a/llvm-7.0.1.src/lib/CodeGen/MachineBasicBlock.cpp
++++ b/llvm-patched/lib/CodeGen/MachineBasicBlock.cpp
+@@ -634,7 +634,7 @@ void MachineBasicBlock::validateSuccProbs() const {
+   // Due to precision issue, we assume that the sum of probabilities is one if
+   // the difference between the sum of their numerators and the denominator is
+   // no greater than the number of successors.
+-  assert((uint64_t)std::abs(Sum - BranchProbability::getDenominator()) <=
++  assert((uint64_t)std::abs((long double)Sum - BranchProbability::getDenominator()) <=
+              Probs.size() &&
+          "The sum of successors's probabilities exceeds one.");
+ #endif // NDEBUG
+diff --git a/llvm-7.0.1.src/lib/Support/CrashRecoveryContext.cpp b/llvm-patched/lib/Support/CrashRecoveryContext.cpp
+old mode 100644
+new mode 100755
+index be4b5c3..7e42ae9
+--- a/llvm-7.0.1.src/lib/Support/CrashRecoveryContext.cpp
++++ b/llvm-patched/lib/Support/CrashRecoveryContext.cpp
+@@ -190,6 +190,9 @@ bool CrashRecoveryContext::RunSafely(function_ref<void()> Fn) {
+ #else // !_MSC_VER
+ 
+ #if defined(_WIN32)
++extern "C"{
++#include <pseh/pseh.h>
++}
+ // This is a non-MSVC compiler, probably mingw gcc or clang without
+ // -fms-extensions. Use vectored exception handling (VEH).
+ //
+@@ -211,67 +214,29 @@ bool CrashRecoveryContext::RunSafely(function_ref<void()> Fn) {
+ 
+ #include "Windows/WindowsSupport.h"
+ 
+-static LONG CALLBACK ExceptionHandler(PEXCEPTION_POINTERS ExceptionInfo)
+-{
+-  // DBG_PRINTEXCEPTION_WIDE_C is not properly defined on all supported
+-  // compilers and platforms, so we define it manually.
+-  constexpr ULONG DbgPrintExceptionWideC = 0x4001000AL;
+-  switch (ExceptionInfo->ExceptionRecord->ExceptionCode)
+-  {
+-  case DBG_PRINTEXCEPTION_C:
+-  case DbgPrintExceptionWideC:
+-  case 0x406D1388:  // set debugger thread name
+-    return EXCEPTION_CONTINUE_EXECUTION;
+-  }
+-
+-  // Lookup the current thread local recovery object.
+-  const CrashRecoveryContextImpl *CRCI = CurrentContext->get();
++static void installExceptionOrSignalHandlers() {}
++static void uninstallExceptionOrSignalHandlers() {}
+ 
+-  if (!CRCI) {
+-    // Something has gone horribly wrong, so let's just tell everyone
+-    // to keep searching
+-    CrashRecoveryContext::Disable();
+-    return EXCEPTION_CONTINUE_SEARCH;
++bool CrashRecoveryContext::RunSafely(function_ref<void()> Fn) {
++  if (!gCrashRecoveryEnabled) {
++    Fn();
++    return true;
+   }
+ 
+-  // TODO: We can capture the stack backtrace here and store it on the
+-  // implementation if we so choose.
+-
+-  // Handle the crash
+-  const_cast<CrashRecoveryContextImpl*>(CRCI)->HandleCrash();
+-
+-  // Note that we don't actually get here because HandleCrash calls
+-  // longjmp, which means the HandleCrash function never returns.
+-  llvm_unreachable("Handled the crash, should have longjmp'ed out of here");
+-}
+-
+-// Because the Enable and Disable calls are static, it means that
+-// there may not actually be an Impl available, or even a current
+-// CrashRecoveryContext at all.  So we make use of a thread-local
+-// exception table.  The handles contained in here will either be
+-// non-NULL, valid VEH handles, or NULL.
+-static sys::ThreadLocal<const void> sCurrentExceptionHandle;
+-
+-static void installExceptionOrSignalHandlers() {
+-  // We can set up vectored exception handling now.  We will install our
+-  // handler as the front of the list, though there's no assurances that
+-  // it will remain at the front (another call could install itself before
+-  // our handler).  This 1) isn't likely, and 2) shouldn't cause problems.
+-  PVOID handle = ::AddVectoredExceptionHandler(1, ExceptionHandler);
+-  sCurrentExceptionHandle.set(handle);
+-}
+-
+-static void uninstallExceptionOrSignalHandlers() {
+-  PVOID currentHandle = const_cast<PVOID>(sCurrentExceptionHandle.get());
+-  if (currentHandle) {
+-    // Now we can remove the vectored exception handler from the chain
+-    ::RemoveVectoredExceptionHandler(currentHandle);
++  bool Result = true;
+ 
+-    // Reset the handle in our thread-local set.
+-    sCurrentExceptionHandle.set(NULL);
++  _SEH_TRY 
++  {
++    Fn();
++  } 
++  _SEH_HANDLE 
++  { // Catch any exception.
++    Result = false;
+   }
++  _SEH_END;
++  
++  return Result;
+ }
+-
+ #else // !_WIN32
+ 
+ // Generic POSIX implementation.
+diff --git a/llvm-7.0.1.src/lib/Support/Windows/Path.inc b/llvm-patched/lib/Support/Windows/Path.inc
+old mode 100644
+new mode 100755
+index f425d60..fbcc075
+--- a/llvm-7.0.1.src/lib/Support/Windows/Path.inc
++++ b/llvm-patched/lib/Support/Windows/Path.inc
+@@ -348,15 +348,158 @@ std::error_code is_local(const Twine &path, bool &result) {
+   return is_local_internal(WidePath, result);
+ }
+ 
++#define BUFSIZE 512
++#include <psapi.h>
++#include <strsafe.h>
++unsigned __int32 GetFileNameFromHandle(HANDLE hFile, wchar_t* data, unsigned __int32 l, unsigned __int32 f) 
++{
++  wchar_t pszFilename[MAX_PATH+1];
++  HANDLE hFileMap;
++  DWORD l2;
++  (void)f; // the path is already normalised
++
++  // Get the file size.
++  DWORD dwFileSizeHi = 0;
++  DWORD dwFileSizeLo = GetFileSize(hFile, &dwFileSizeHi); 
++
++  if( dwFileSizeLo == 0 && dwFileSizeHi == 0 )
++     return ERROR_INVALID_PARAMETER;
++
++  // Create a file mapping object.
++  hFileMap = CreateFileMapping(hFile, 
++                    nullptr, 
++                    PAGE_READONLY,
++                    0, 
++                    1,
++                    nullptr);
++
++  if (hFileMap) 
++  {
++    // Create a file mapping to get the file name.
++    void* pMem = MapViewOfFile(hFileMap, FILE_MAP_READ, 0, 0, 1);
++
++    if (pMem) 
++    {
++      if (GetMappedFileNameW (GetCurrentProcess(), 
++                             pMem, 
++                             pszFilename,
++                             MAX_PATH)) 
++      {
++
++        // Translate path with device name to drive letters.
++        wchar_t szTemp[BUFSIZE];
++        szTemp[0] = L'\0';
++
++        if (GetLogicalDriveStringsW(BUFSIZE-1, szTemp)) 
++        {
++          wchar_t szName[MAX_PATH];
++          wchar_t szDrive[3] = L" :";
++          BOOL bFound = FALSE;
++          wchar_t* p = szTemp;
++
++          do 
++          {
++            // Copy the drive letter to the template string
++            *szDrive = *p;
++
++            // Look up each device name
++            if (QueryDosDeviceW(szDrive, szName, MAX_PATH))
++            {
++              size_t uNameLen = wcslen(szName);
++
++              if (uNameLen < MAX_PATH) 
++              {
++                bFound = wcsnicmp(pszFilename, szName, uNameLen) == 0
++                         && *(pszFilename + uNameLen) == L'\\';
++
++                if (bFound) 
++                {
++                  // Reconstruct pszFilename using szTempFile
++                  // Replace device path with DOS path
++                  wchar_t szTempFile[MAX_PATH];
++                  StringCchPrintfW(szTempFile,
++                            MAX_PATH,
++                            L"%s%s",
++                            szDrive,
++                            pszFilename+uNameLen);
++                  StringCchCopyNW(pszFilename, MAX_PATH+1, szTempFile, wcslen(szTempFile));
++                }
++		else
++		{
++			UnmapViewOfFile(pMem);
++			CloseHandle(hFileMap);
++			goto NotFound;
++		}
++              }
++	      else
++	      {
++		      UnmapViewOfFile(pMem);
++		      CloseHandle(hFileMap);
++		      goto NoCore;
++	      }
++            }
++	    else
++	    {
++		    UnmapViewOfFile(pMem);
++		    CloseHandle(hFileMap);
++		    goto NotFound;
++	    }
++
++            // Go to the next NULL character.
++            while (*p++);
++          } while (!bFound && *p); // end of string
++        }
++	else
++	{
++		NotFound:
++		return ERROR_PATH_NOT_FOUND;
++	}
++      }
++      else
++      {
++	      UnmapViewOfFile(pMem);
++	      CloseHandle(hFileMap);
++	      goto NoCore;
++      }
++      UnmapViewOfFile(pMem);
++    }
++    else
++    {
++	    CloseHandle(hFileMap);
++	    goto NoCore;
++    } 
++    CloseHandle(hFileMap);
++  }
++  else
++  {
++	  NoCore:
++	  return ERROR_NOT_ENOUGH_MEMORY;
++  }
++
++  l2 = wcslen(pszFilename);
++  
++  if (l > l2)
++  {
++	  wcsncpy(data, pszFilename, l);
++	  data[l2] = L'\0';
++  }
++  else
++  {
++	  return l2+1;
++  }
++
++  return l2;
++}
++
+ static std::error_code realPathFromHandle(HANDLE H,
+                                           SmallVectorImpl<wchar_t> &Buffer) {
+-  DWORD CountChars = ::GetFinalPathNameByHandleW(
++  DWORD CountChars = GetFileNameFromHandle(
+       H, Buffer.begin(), Buffer.capacity() - 1, FILE_NAME_NORMALIZED);
+   if (CountChars > Buffer.capacity()) {
+     // The buffer wasn't big enough, try again.  In this case the return value
+     // *does* indicate the size of the null terminator.
+     Buffer.reserve(CountChars);
+-    CountChars = ::GetFinalPathNameByHandleW(
++    CountChars = GetFileNameFromHandle(
+         H, Buffer.data(), Buffer.capacity() - 1, FILE_NAME_NORMALIZED);
+   }
+   if (CountChars == 0)
+@@ -1255,15 +1398,24 @@ std::error_code real_path(const Twine &path, SmallVectorImpl<char> &dest,
+ namespace path {
+ static bool getKnownFolderPath(KNOWNFOLDERID folderId,
+                                SmallVectorImpl<char> &result) {
+-  wchar_t *path = nullptr;
+-  if (::SHGetKnownFolderPath(folderId, KF_FLAG_CREATE, nullptr, &path) != S_OK)
++  wchar_t path[MAX_PATH];
++  KNOWNFOLDERID tmp = folderId;
++  int csidl = 0;
++
++  if (tmp == FOLDERID_LocalAppData)
++    csidl = CSIDL_LOCAL_APPDATA | CSIDL_FLAG_CREATE;
++  if (tmp == FOLDERID_Profile)
++    csidl = CSIDL_PROFILE | CSIDL_FLAG_CREATE;
++  
++  if (!csidl) // we only return two folders. why the fuck do we pull in any of the other values, we can add them as they come -despair
++    return false;
++  
++  if (::SHGetFolderPathW(nullptr, csidl, nullptr, 0, path) != S_OK)
+     return false;
+ 
+   bool ok = !UTF16ToUTF8(path, ::wcslen(path), result);
+-  ::CoTaskMemFree(path);
+   return ok;
+ }
+-
+ bool getUserCacheDir(SmallVectorImpl<char> &Result) {
+   return getKnownFolderPath(FOLDERID_LocalAppData, Result);
+ }
+diff --git a/llvm-7.0.1.src/lib/Support/Windows/Process.inc b/llvm-patched/lib/Support/Windows/Process.inc
+old mode 100644
+new mode 100755
+index 3012656..d31c97e
+--- a/llvm-7.0.1.src/lib/Support/Windows/Process.inc
++++ b/llvm-patched/lib/Support/Windows/Process.inc
+@@ -49,7 +49,7 @@ static unsigned computePageSize() {
+   // GetNativeSystemInfo() provides the physical page size which may differ
+   // from GetSystemInfo() in 32-bit applications running under WOW64.
+   SYSTEM_INFO info;
+-  GetNativeSystemInfo(&info);
++  GetSystemInfo(&info);
+   // FIXME: FileOffset in MapViewOfFile() should be aligned to not dwPageSize,
+   // but dwAllocationGranularity.
+   return static_cast<unsigned>(info.dwPageSize);
+diff --git a/llvm-7.0.1.src/lib/Support/Windows/Signals.inc b/llvm-patched/lib/Support/Windows/Signals.inc
+old mode 100644
+new mode 100755
+index 41eb5e5..673a1ec
+--- a/llvm-7.0.1.src/lib/Support/Windows/Signals.inc
++++ b/llvm-patched/lib/Support/Windows/Signals.inc
+@@ -519,8 +519,10 @@ void sys::PrintStackTraceOnErrorSignal(StringRef Argv0,
+ #if defined(__MINGW32__) && !defined(__MINGW64_VERSION_MAJOR)
+ // Provide a prototype for RtlCaptureContext, mingw32 from mingw.org is
+ // missing it but mingw-w64 has it.
++// PATCH(despair): inject win32_misc.s somewhere in the build system
+ extern "C" VOID WINAPI RtlCaptureContext(PCONTEXT ContextRecord);
+ #endif
++extern "C" void FAR PASCAL _RtlCaptureContext(CONTEXT* ContextRecord);
+ 
+ void llvm::sys::PrintStackTrace(raw_ostream &OS) {
+   STACKFRAME64 StackFrame = {};
+@@ -623,14 +625,12 @@ static bool GetDumpFolder(HKEY Key,
+ 
+   DWORD BufferLengthBytes = 0;
+ 
+-  if (ERROR_SUCCESS != ::RegGetValueW(Key, 0, L"DumpFolder", REG_EXPAND_SZ,
+-                                      NULL, NULL, &BufferLengthBytes))
++  if (ERROR_SUCCESS != ::RegQueryValueExW(Key, L"DumpFolder", nullptr, nullptr, nullptr, &BufferLengthBytes))
+     return false;
+ 
+   SmallVector<wchar_t, MAX_PATH> Buffer(BufferLengthBytes);
+ 
+-  if (ERROR_SUCCESS != ::RegGetValueW(Key, 0, L"DumpFolder", REG_EXPAND_SZ,
+-                                      NULL, Buffer.data(), &BufferLengthBytes))
++if (ERROR_SUCCESS != ::RegQueryValueExW(Key, L"DumpFolder", nullptr, nullptr, (BYTE*)Buffer.data(), &BufferLengthBytes))
+     return false;
+ 
+   DWORD ExpandBufferSize = ::ExpandEnvironmentStringsW(Buffer.data(), NULL, 0);
+@@ -670,17 +670,13 @@ static bool GetDumpType(HKEY Key, MINIDUMP_TYPE &ResultType) {
+ 
+   DWORD DumpType;
+   DWORD TypeSize = sizeof(DumpType);
+-  if (ERROR_SUCCESS != ::RegGetValueW(Key, NULL, L"DumpType", RRF_RT_REG_DWORD,
+-                                      NULL, &DumpType,
+-                                      &TypeSize))
++  if (ERROR_SUCCESS != ::RegQueryValueExW(Key, L"DumpType", nullptr, nullptr, (BYTE*)&DumpType, &TypeSize))
+     return false;
+ 
+   switch (DumpType) {
+   case 0: {
+     DWORD Flags = 0;
+-    if (ERROR_SUCCESS != ::RegGetValueW(Key, NULL, L"CustomDumpFlags",
+-                                        RRF_RT_REG_DWORD, NULL, &Flags,
+-                                        &TypeSize))
++    if (ERROR_SUCCESS != ::RegQueryValueExW(Key, L"CustomDumpFlags", nullptr, nullptr, (BYTE*)&Flags, &TypeSize))
+       return false;
+ 
+     ResultType = static_cast<MINIDUMP_TYPE>(Flags);
+diff --git a/llvm-7.0.1.src/lib/Target/X86/X86AvoidStoreForwardingBlocks.cpp b/llvm-patched/lib/Target/X86/X86AvoidStoreForwardingBlocks.cpp
+index ab2cbfc..adaff17 100644
+--- a/llvm-7.0.1.src/lib/Target/X86/X86AvoidStoreForwardingBlocks.cpp
++++ b/llvm-patched/lib/Target/X86/X86AvoidStoreForwardingBlocks.cpp
+@@ -590,7 +590,7 @@ void X86AvoidSFBPass::breakBlockedCopies(
+       StDisp2 += OverlapDelta;
+       Size2 -= OverlapDelta;
+     }
+-    Size1 = std::abs(std::abs(LdDisp2) - std::abs(LdDisp1));
++    Size1 = std::abs((long)std::abs((long)LdDisp2) - std::abs((long)LdDisp1));
+ 
+     // Build a copy for the point until the current blocking store's
+     // displacement.
+diff --git a/llvm-7.0.1.src/lib/Target/X86/X86FrameLowering.cpp b/llvm-patched/lib/Target/X86/X86FrameLowering.cpp
+index e207c34..d14ffad 100644
+--- a/llvm-7.0.1.src/lib/Target/X86/X86FrameLowering.cpp
++++ b/llvm-patched/lib/Target/X86/X86FrameLowering.cpp
+@@ -1999,7 +1999,7 @@ bool X86FrameLowering::assignCalleeSavedSpillSlots(
+     unsigned Size = TRI->getSpillSize(*RC);
+     unsigned Align = TRI->getSpillAlignment(*RC);
+     // ensure alignment
+-    SpillSlotOffset -= std::abs(SpillSlotOffset) % Align;
++    SpillSlotOffset -= std::abs((long)SpillSlotOffset) % Align;
+     // spill into slot
+     SpillSlotOffset -= Size;
+     int SlotIndex = MFI.CreateFixedSpillStackObject(Size, SpillSlotOffset);
+@@ -3128,7 +3128,7 @@ void X86FrameLowering::processFunctionBeforeFrameFinalized(
+       if (FrameIndex != INT_MAX) {
+         // Ensure alignment.
+         unsigned Align = MFI.getObjectAlignment(FrameIndex);
+-        MinFixedObjOffset -= std::abs(MinFixedObjOffset) % Align;
++        MinFixedObjOffset -= std::abs((long)MinFixedObjOffset) % Align;
+         MinFixedObjOffset -= MFI.getObjectSize(FrameIndex);
+         MFI.setObjectOffset(FrameIndex, MinFixedObjOffset);
+       }
+@@ -3136,7 +3136,7 @@ void X86FrameLowering::processFunctionBeforeFrameFinalized(
+   }
+ 
+   // Ensure alignment.
+-  MinFixedObjOffset -= std::abs(MinFixedObjOffset) % 8;
++  MinFixedObjOffset -= std::abs((long)MinFixedObjOffset) % 8;
+   int64_t UnwindHelpOffset = MinFixedObjOffset - SlotSize;
+   int UnwindHelpFI =
+       MFI.CreateFixedObject(SlotSize, UnwindHelpOffset, /*Immutable=*/false);
+diff --git a/llvm-7.0.1.src/lib/Target/X86/X86ISelLowering.cpp b/llvm-patched/lib/Target/X86/X86ISelLowering.cpp
+index 67a127f..5785878 100644
+--- a/llvm-7.0.1.src/lib/Target/X86/X86ISelLowering.cpp
++++ b/llvm-patched/lib/Target/X86/X86ISelLowering.cpp
+@@ -2157,8 +2157,10 @@ Value *X86TargetLowering::getSDagStackGuard(const Module &M) const {
+ 
+ Value *X86TargetLowering::getSSPStackGuardCheck(const Module &M) const {
+   // MSVC CRT has a function to validate security cookie.
+-  if (Subtarget.getTargetTriple().isWindowsMSVCEnvironment() ||
+-      Subtarget.getTargetTriple().isWindowsItaniumEnvironment()) {
++  // We have the stack cookie in GNU mode, but *not* the check function
++  if ((Subtarget.getTargetTriple().isWindowsMSVCEnvironment() ||
++      Subtarget.getTargetTriple().isWindowsItaniumEnvironment()) &&
++		 !Subtarget.isTargetWindowsGNU()) {
+     return M.getFunction("__security_check_cookie");
+   }
+   return TargetLowering::getSSPStackGuardCheck(M);
+diff --git a/llvm-7.0.1.src/lib/Transforms/Scalar/AlignmentFromAssumptions.cpp b/llvm-patched/lib/Transforms/Scalar/AlignmentFromAssumptions.cpp
+index 0830ff5..dc52427 100644
+--- a/llvm-7.0.1.src/lib/Transforms/Scalar/AlignmentFromAssumptions.cpp
++++ b/llvm-patched/lib/Transforms/Scalar/AlignmentFromAssumptions.cpp
+@@ -114,7 +114,7 @@ static unsigned getNewAlignmentDiff(const SCEV *DiffSCEV,
+ 
+     // If the displacement is not an exact multiple, but the remainder is a
+     // constant, then return this remainder (but only if it is a power of 2).
+-    uint64_t DiffUnitsAbs = std::abs(DiffUnits);
++    uint64_t DiffUnitsAbs = std::abs((long double)DiffUnits);
+     if (isPowerOf2_64(DiffUnitsAbs))
+       return (unsigned) DiffUnitsAbs;
+   }
+diff --git a/llvm-7.0.1.src/lib/Transforms/Scalar/LoopDataPrefetch.cpp b/llvm-patched/lib/Transforms/Scalar/LoopDataPrefetch.cpp
+index 3b41b5d..58e6ede 100644
+--- a/llvm-7.0.1.src/lib/Transforms/Scalar/LoopDataPrefetch.cpp
++++ b/llvm-patched/lib/Transforms/Scalar/LoopDataPrefetch.cpp
+@@ -150,7 +150,7 @@ bool LoopDataPrefetch::isStrideLargeEnough(const SCEVAddRecExpr *AR) {
+   if (!ConstStride)
+     return false;
+ 
+-  unsigned AbsStride = std::abs(ConstStride->getAPInt().getSExtValue());
++  unsigned AbsStride = std::abs((double)ConstStride->getAPInt().getSExtValue());
+   return TargetMinStride <= AbsStride;
+ }
+ 
+@@ -288,7 +288,7 @@ bool LoopDataPrefetch::runOnLoop(Loop *L) {
+         const SCEV *PtrDiff = SE->getMinusSCEV(LSCEVAddRec, PrefLoad.second);
+         if (const SCEVConstant *ConstPtrDiff =
+             dyn_cast<SCEVConstant>(PtrDiff)) {
+-          int64_t PD = std::abs(ConstPtrDiff->getValue()->getSExtValue());
++          int64_t PD = std::abs((long double)ConstPtrDiff->getValue()->getSExtValue());
+           if (PD < (int64_t) TTI->getCacheLineSize()) {
+             DupPref = true;
+             break;
+diff --git a/llvm-7.0.1.src/lib/Transforms/Scalar/LoopRerollPass.cpp b/llvm-patched/lib/Transforms/Scalar/LoopRerollPass.cpp
+index 9a99e59..6e0b213 100644
+--- a/llvm-7.0.1.src/lib/Transforms/Scalar/LoopRerollPass.cpp
++++ b/llvm-patched/lib/Transforms/Scalar/LoopRerollPass.cpp
+@@ -808,7 +808,7 @@ collectPossibleRoots(Instruction *Base, std::map<int64_t,Instruction*> &Roots) {
+       }
+     }
+ 
+-    int64_t V = std::abs(CI->getValue().getSExtValue());
++    int64_t V = std::abs((long double)CI->getValue().getSExtValue());
+     if (Roots.find(V) != Roots.end())
+       // No duplicates, please.
+       return false;
+@@ -957,7 +957,7 @@ bool LoopReroll::DAGRootTracker::findRoots() {
+   Inc = IVToIncMap[IV];
+ 
+   assert(RootSets.empty() && "Unclean state!");
+-  if (std::abs(Inc) == 1) {
++  if (std::abs((double)Inc) == 1) {
+     for (auto *IVU : IV->users()) {
+       if (isLoopIncrement(IVU, IV))
+         LoopIncs.push_back(cast<Instruction>(IVU));
+diff --git a/llvm-7.0.1.src/lib/Transforms/Scalar/LoopStrengthReduce.cpp b/llvm-patched/lib/Transforms/Scalar/LoopStrengthReduce.cpp
+index fa83b48..0176dbe 100644
+--- a/llvm-7.0.1.src/lib/Transforms/Scalar/LoopStrengthReduce.cpp
++++ b/llvm-patched/lib/Transforms/Scalar/LoopStrengthReduce.cpp
+@@ -4095,7 +4095,7 @@ void LSRInstance::GenerateCrossUseConstantOffsets() {
+         if (const SCEVConstant *C = dyn_cast<SCEVConstant>(NewF.ScaledReg))
+           if (C->getValue()->isNegative() != (NewF.BaseOffset < 0) &&
+               (C->getAPInt().abs() * APInt(BitWidth, F.Scale))
+-                  .ule(std::abs(NewF.BaseOffset)))
++                  .ule(std::abs((long double)NewF.BaseOffset)))
+             continue;
+ 
+         // OK, looks good.
+@@ -4128,7 +4128,7 @@ void LSRInstance::GenerateCrossUseConstantOffsets() {
+             if (const SCEVConstant *C = dyn_cast<SCEVConstant>(NewReg))
+               if ((C->getAPInt() + NewF.BaseOffset)
+                       .abs()
+-                      .slt(std::abs(NewF.BaseOffset)) &&
++                      .slt(std::abs((long double)NewF.BaseOffset)) &&
+                   (C->getAPInt() + NewF.BaseOffset).countTrailingZeros() >=
+                       countTrailingZeros<uint64_t>(NewF.BaseOffset))
+                 goto skip_formula;
+diff --git a/llvm-7.0.1.src/tools/clang/tools/extra/clangd/Context.cpp b/llvm-patched/tools/clang/tools/extra/clangd/Context.cpp
+index 1a9ef24..69a96a6 100644
+--- a/llvm-7.0.1.src/tools/clang/tools/extra/clangd/Context.cpp
++++ b/llvm-patched/tools/clang/tools/extra/clangd/Context.cpp
+@@ -21,7 +21,11 @@ Context::Context(std::shared_ptr<const Data> DataPtr)
+ Context Context::clone() const { return Context(DataPtr); }
+ 
+ static Context &currentContext() {
++#if defined(__clang__)
++  static auto C = Context::empty();
++#else
+   static thread_local auto C = Context::empty();
++#endif
+   return C;
+ }
+ 
+diff --git a/llvm-7.0.1.src/tools/lld/COFF/Config.h b/llvm-patched/tools/lld/COFF/Config.h
+index 3ae50b8..7cfd874 100644
+--- a/llvm-7.0.1.src/tools/lld/COFF/Config.h
++++ b/llvm-patched/tools/lld/COFF/Config.h
+@@ -181,7 +181,7 @@ struct Configuration {
+   uint64_t HeapCommit = 4096;
+   uint32_t MajorImageVersion = 0;
+   uint32_t MinorImageVersion = 0;
+-  uint32_t MajorOSVersion = 6;
++  uint32_t MajorOSVersion = 5;
+   uint32_t MinorOSVersion = 0;
+   uint32_t Timestamp = 0;
+   bool DynamicBase = true;
+diff --git a/llvm-7.0.1.src/tools/lld/COFF/Driver.cpp b/llvm-patched/tools/lld/COFF/Driver.cpp
+index e42a37f..284d431 100644
+--- a/llvm-7.0.1.src/tools/lld/COFF/Driver.cpp
++++ b/llvm-patched/tools/lld/COFF/Driver.cpp
+@@ -459,7 +459,7 @@ WindowsSubsystem LinkerDriver::inferSubsystem() {
+ static uint64_t getDefaultImageBase() {
+   if (Config->is64())
+     return Config->DLL ? 0x180000000 : 0x140000000;
+-  return Config->DLL ? 0x10000000 : 0x400000;
++  return Config->DLL ? 0x400000 : 0x10000;
+ }
+ 
+ static std::string createResponseFile(const opt::InputArgList &Args,
+diff --git a/llvm-7.0.1.src/tools/llvm-readobj/ELFDumper.cpp b/llvm-patched/tools/llvm-readobj/ELFDumper.cpp
+index 645ec2d..36ff0a9 100644
+--- a/llvm-7.0.1.src/tools/llvm-readobj/ELFDumper.cpp
++++ b/llvm-patched/tools/llvm-readobj/ELFDumper.cpp
+@@ -2666,7 +2666,7 @@ void GNUStyle<ELFT>::printRelocation(const ELFO *Obj, const Elf_Shdr *SymTab,
+ 
+   int64_t RelAddend = R.r_addend;
+   if (IsRela)
+-    Addend += to_hexString(std::abs(RelAddend), false);
++    Addend += to_hexString(std::abs((long)RelAddend), false);
+ 
+   if (Sym)
+     Value = to_string(format_hex_no_prefix(Sym->getValue(), Width));
+@@ -3341,7 +3341,7 @@ void GNUStyle<ELFT>::printDynamicRelocation(const ELFO *Obj, Elf_Rela R,
+     Value = "";
+ 
+   if (IsRela)
+-    Addend += to_string(format_hex_no_prefix(std::abs(RelAddend), 1));
++    Addend += to_string(format_hex_no_prefix(std::abs((long)RelAddend), 1));
+ 
+ 
+   Fields[0].Str = Offset;
