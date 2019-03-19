@@ -47,6 +47,21 @@ index 4d9c1d9..1f65cd5 100644
  #endif
  
  #define __max(a,b) (((a) > (b)) ? (a) : (b))
+diff --git a/mingw-w64-v6.0.0/mingw-w64-headers/include/tdi.h b/mingw-w64-v6.0.0-patched/mingw-w64-headers/include/tdi.h
+index 3120070..6c5298b 100644
+--- a/mingw-w64-v6.0.0/mingw-w64-headers/include/tdi.h
++++ b/mingw-w64-v6.0.0-patched/mingw-w64-headers/include/tdi.h
+@@ -24,8 +24,8 @@
+ #define __TDI_H
+ 
+ #include "ntddtdi.h"
+-#include "tdistat.h"
+-#include "netpnp.h"
++#include "ddk/tdistat.h"
++#include "ddk/netpnp.h"
+ 
+ #ifdef __cplusplus
+ extern "C" {
 diff --git a/mingw-w64-v6.0.0/mingw-w64-libraries/winpthreads/src/thread.c b/mingw-w64-v6.0.0-patched/mingw-w64-libraries/winpthreads/src/thread.c
 index 2b7c7be..9734c58 100644
 --- a/mingw-w64-v6.0.0/mingw-w64-libraries/winpthreads/src/thread.c
