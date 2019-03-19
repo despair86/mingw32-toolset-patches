@@ -1,0 +1,26 @@
+diff --git a/gcc-8.3.0/libstdc++-v3/libsupc++/typeinfo b/gcc-8.3.0-patched/libstdc++-v3/libsupc++/typeinfo
+index a186feb..449127d 100644
+--- a/gcc-8.3.0/libstdc++-v3/libsupc++/typeinfo
++++ b/gcc-8.3.0-patched/libstdc++-v3/libsupc++/typeinfo
+@@ -116,7 +116,9 @@ namespace std
+     { return (__name[0] == '*' && __arg.__name[0] == '*')
+ 	? __name < __arg.__name
+ 	: __builtin_strcmp (__name, __arg.__name) < 0; }
+-
++#ifdef __clang__
++__attribute__((always_inline))
++#endif
+     bool operator==(const type_info& __arg) const _GLIBCXX_NOEXCEPT
+     {
+       return ((__name == __arg.__name)
+@@ -128,7 +130,9 @@ namespace std
+     // and therefore address comparisons are sufficient.
+     bool before(const type_info& __arg) const _GLIBCXX_NOEXCEPT
+     { return __name < __arg.__name; }
+-
++#ifdef __clang__
++__attribute__((always_inline))
++#endif
+     bool operator==(const type_info& __arg) const _GLIBCXX_NOEXCEPT
+     { return __name == __arg.__name; }
+   #endif

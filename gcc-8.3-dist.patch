@@ -1,88 +1,83 @@
-From eda88e06651c9293012212b665ca592c85bef645 Mon Sep 17 00:00:00 2001
-From: Liu Hao <lh_mouse@126.com>
-Date: Sat, 26 Jan 2019 15:14:38 +0800
-Subject: [PATCH] Backport patches for std::filesystem from master.
-
-This is done by running the following commands on `gcc-8-branch`:
-
-  git cherry-pick 861db1097d3f 2fd48392d0a4 70fea18e0bbb d4fd5c4964cf
-  git checkout master -- libstdc++-v3/src/filesystem/  \
-    libstdc++-v3/include/bits/fs_\* libstdc++-v3/include/std/filesystem
-
-Testsuites and change logs were discarded to reduce the amount of
-modification.
-
-Signed-off-by: Liu Hao <lh_mouse@126.com>
----
- libstdc++-v3/config.h.in                      |  12 +
- libstdc++-v3/config/io/basic_file_stdio.cc    |  33 ++
- libstdc++-v3/config/io/basic_file_stdio.h     |   5 +
- libstdc++-v3/configure                        |  35 ++
- libstdc++-v3/configure.ac                     |   2 +
- libstdc++-v3/crossconfig.m4                   |   1 +
- libstdc++-v3/include/bits/fs_dir.h            |  14 +-
- libstdc++-v3/include/bits/fs_path.h           | 250 +++++++-------
- libstdc++-v3/include/bits/fstream.tcc         |  36 ++
- .../include/experimental/bits/fs_path.h       |  74 ++--
- libstdc++-v3/include/std/fstream              | 119 +++++++
- libstdc++-v3/src/filesystem/dir-common.h      |  56 ++-
- libstdc++-v3/src/filesystem/dir.cc            |   5 +-
- libstdc++-v3/src/filesystem/ops-common.h      | 105 +++++-
- libstdc++-v3/src/filesystem/ops.cc            | 186 +++++-----
- libstdc++-v3/src/filesystem/path.cc           |  24 +-
- libstdc++-v3/src/filesystem/std-dir.cc        |   5 +-
- libstdc++-v3/src/filesystem/std-ops.cc        | 318 ++++++++++--------
- libstdc++-v3/src/filesystem/std-path.cc       | 123 ++++---
- 19 files changed, 942 insertions(+), 461 deletions(-)
-
-diff --git a/libstdc++-v3/config.h.in b/libstdc++-v3/config.h.in
-index 765cedc6edf..3fb685ce9aa 100644
---- a/libstdc++-v3/config.h.in
-+++ b/libstdc++-v3/config.h.in
-@@ -264,6 +264,9 @@
- /* Only used in build directory testsuite_hooks.h. */
- #undef HAVE_LIMIT_VMEM
+diff --git a/gcc-8.3.0/gcc/cgraphclones.c b/gcc-8.3.0-patched/gcc/cgraphclones.c
+index 6e84a31..e622484 100644
+--- a/gcc-8.3.0/gcc/cgraphclones.c
++++ b/gcc-8.3.0-patched/gcc/cgraphclones.c
+@@ -515,19 +515,30 @@ cgraph_node::create_clone (tree new_decl, profile_count prof_count,
+ static GTY(()) unsigned int clone_fn_id_num;
  
-+/* Define to 1 if you have the `link' function. */
-+#undef HAVE_LINK
+ /* Return a new assembler name for a clone with SUFFIX of a decl named
+-   NAME.  */
++   NAME. Final stdcall @N suffixes are maintained. */
+ 
+ tree
+ clone_function_name_1 (const char *name, const char *suffix)
+ {
+   size_t len = strlen (name);
+   char *tmp_name, *prefix;
++  char *at_suffix = NULL;
+ 
+   prefix = XALLOCAVEC (char, len + strlen (suffix) + 2);
++  /* name + 1 to skip fastcall which begins with '@' */
++  at_suffix = strchr ((char*)name + 1, '@');
++  size_t at_suffix_len = 0;
++  if (at_suffix)
++    {
++      at_suffix_len = strlen (at_suffix);
++      len -= at_suffix_len;
++    }
+   memcpy (prefix, name, len);
+   strcpy (prefix + len + 1, suffix);
+   prefix[len] = symbol_table::symbol_suffix_separator ();
+   ASM_FORMAT_PRIVATE_NAME (tmp_name, prefix, clone_fn_id_num++);
++  if (at_suffix)
++    strcat (tmp_name, at_suffix);
+   return get_identifier (tmp_name);
+ }
+ 
+diff --git a/gcc-8.3.0/gcc/config/i386/cygming.opt b/gcc-8.3.0-patched/gcc/config/i386/cygming.opt
+index ab9d3e3..1589211 100644
+--- a/gcc-8.3.0/gcc/config/i386/cygming.opt
++++ b/gcc-8.3.0-patched/gcc/config/i386/cygming.opt
+@@ -22,6 +22,9 @@ mconsole
+ Target RejectNegative
+ Create console application.
+ 
++mcrtdll=
++Target RejectNegative Joined
 +
- /* Define if futex syscall is available. */
- #undef HAVE_LINUX_FUTEX
+ mdll
+ Target RejectNegative
+ Generate code for a DLL.
+diff --git a/gcc-8.3.0/gcc/config/i386/mingw32.h b/gcc-8.3.0-patched/gcc/config/i386/mingw32.h
+index a660108..0612b87 100644
+--- a/gcc-8.3.0/gcc/config/i386/mingw32.h
++++ b/gcc-8.3.0-patched/gcc/config/i386/mingw32.h
+@@ -142,7 +142,7 @@ along with GCC; see the file COPYING3.  If not see
+ #define REAL_LIBGCC_SPEC \
+   "%{mthreads:-lmingwthrd} -lmingw32 \
+    " SHARED_LIBGCC_SPEC " \
+-   -lmoldname -lmingwex -lmsvcrt"
++   -lmoldname -lmingwex %{!mcrtdll=*:-lmsvcrt} %{mcrtdll=*:-l%*}"
  
-@@ -339,6 +342,9 @@
- /* Define to 1 if you have the `quick_exit' function. */
- #undef HAVE_QUICK_EXIT
- 
-+/* Define to 1 if you have the `readlink' function. */
-+#undef HAVE_READLINK
-+
- /* Define to 1 if you have the `setenv' function. */
- #undef HAVE_SETENV
- 
-@@ -408,6 +414,9 @@
- /* Define if strxfrm_l is available in <string.h>. */
- #undef HAVE_STRXFRM_L
- 
-+/* Define to 1 if you have the `symlink' function. */
-+#undef HAVE_SYMLINK
-+
- /* Define to 1 if the target runtime linker supports binding the same symbol
-    to different versions. */
- #undef HAVE_SYMVER_SYMBOL_RENAMING_RUNTIME_SUPPORT
-@@ -706,6 +715,9 @@
- /* Define to 1 if you have the `_tanl' function. */
- #undef HAVE__TANL
- 
-+/* Define to 1 if you have the `_wfopen' function. */
-+#undef HAVE__WFOPEN
-+
- /* Define to 1 if you have the `__cxa_thread_atexit' function. */
- #undef HAVE___CXA_THREAD_ATEXIT
- 
-diff --git a/libstdc++-v3/config/io/basic_file_stdio.cc b/libstdc++-v3/config/io/basic_file_stdio.cc
-index a46814802cd..09ccd6a4788 100644
---- a/libstdc++-v3/config/io/basic_file_stdio.cc
-+++ b/libstdc++-v3/config/io/basic_file_stdio.cc
+ #undef STARTFILE_SPEC
+ #define STARTFILE_SPEC "%{shared|mdll:dllcrt2%O%s} \
+diff --git a/gcc-8.3.0/gcc/defaults.h b/gcc-8.3.0-patched/gcc/defaults.h
+index 9035b33..b5624f0 100644
+--- a/gcc-8.3.0/gcc/defaults.h
++++ b/gcc-8.3.0-patched/gcc/defaults.h
+@@ -51,7 +51,7 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+ # define ASM_FORMAT_PRIVATE_NAME(OUTPUT, NAME, LABELNO) \
+   do { const char *const name_ = (NAME); \
+        char *const output_ = (OUTPUT) = \
+-	 (char *) alloca (strlen (name_) + 32); \
++	 (char *) alloca (strlen (name_) + 35); \
+        sprintf (output_, ASM_PN_FORMAT, name_, (unsigned long)(LABELNO)); \
+   } while (0)
+ #endif
+diff --git a/gcc-8.3.0/libstdc++-v3/config/io/basic_file_stdio.cc b/gcc-8.3.0-patched/libstdc++-v3/config/io/basic_file_stdio.cc
+index a468148..09ccd6a 100644
+--- a/gcc-8.3.0/libstdc++-v3/config/io/basic_file_stdio.cc
++++ b/gcc-8.3.0-patched/libstdc++-v3/config/io/basic_file_stdio.cc
 @@ -249,6 +249,39 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
      return __ret;
    }
@@ -123,10 +118,10 @@ index a46814802cd..09ccd6a4788 100644
    bool
    __basic_file<char>::is_open() const throw ()
    { return _M_cfile != 0; }
-diff --git a/libstdc++-v3/config/io/basic_file_stdio.h b/libstdc++-v3/config/io/basic_file_stdio.h
-index 58f24f670f6..3c857272c57 100644
---- a/libstdc++-v3/config/io/basic_file_stdio.h
-+++ b/libstdc++-v3/config/io/basic_file_stdio.h
+diff --git a/gcc-8.3.0/libstdc++-v3/config/io/basic_file_stdio.h b/gcc-8.3.0-patched/libstdc++-v3/config/io/basic_file_stdio.h
+index 58f24f6..3c85727 100644
+--- a/gcc-8.3.0/libstdc++-v3/config/io/basic_file_stdio.h
++++ b/gcc-8.3.0-patched/libstdc++-v3/config/io/basic_file_stdio.h
 @@ -84,6 +84,11 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        __basic_file*
        open(const char* __name, ios_base::openmode __mode, int __prot = 0664);
@@ -139,10 +134,54 @@ index 58f24f670f6..3c857272c57 100644
        __basic_file*
        sys_open(__c_file* __file, ios_base::openmode);
  
-diff --git a/libstdc++-v3/configure b/libstdc++-v3/configure
-index 5535bfa2b5a..b9883d413f6 100755
---- a/libstdc++-v3/configure
-+++ b/libstdc++-v3/configure
+diff --git a/gcc-8.3.0/libstdc++-v3/config.h.in b/gcc-8.3.0-patched/libstdc++-v3/config.h.in
+index 765cedc..3fb685c 100644
+--- a/gcc-8.3.0/libstdc++-v3/config.h.in
++++ b/gcc-8.3.0-patched/libstdc++-v3/config.h.in
+@@ -264,6 +264,9 @@
+ /* Only used in build directory testsuite_hooks.h. */
+ #undef HAVE_LIMIT_VMEM
+ 
++/* Define to 1 if you have the `link' function. */
++#undef HAVE_LINK
++
+ /* Define if futex syscall is available. */
+ #undef HAVE_LINUX_FUTEX
+ 
+@@ -339,6 +342,9 @@
+ /* Define to 1 if you have the `quick_exit' function. */
+ #undef HAVE_QUICK_EXIT
+ 
++/* Define to 1 if you have the `readlink' function. */
++#undef HAVE_READLINK
++
+ /* Define to 1 if you have the `setenv' function. */
+ #undef HAVE_SETENV
+ 
+@@ -408,6 +414,9 @@
+ /* Define if strxfrm_l is available in <string.h>. */
+ #undef HAVE_STRXFRM_L
+ 
++/* Define to 1 if you have the `symlink' function. */
++#undef HAVE_SYMLINK
++
+ /* Define to 1 if the target runtime linker supports binding the same symbol
+    to different versions. */
+ #undef HAVE_SYMVER_SYMBOL_RENAMING_RUNTIME_SUPPORT
+@@ -706,6 +715,9 @@
+ /* Define to 1 if you have the `_tanl' function. */
+ #undef HAVE__TANL
+ 
++/* Define to 1 if you have the `_wfopen' function. */
++#undef HAVE__WFOPEN
++
+ /* Define to 1 if you have the `__cxa_thread_atexit' function. */
+ #undef HAVE___CXA_THREAD_ATEXIT
+ 
+diff --git a/gcc-8.3.0/libstdc++-v3/configure b/gcc-8.3.0-patched/libstdc++-v3/configure
+index 5535bfa..b9883d4 100755
+--- a/gcc-8.3.0/libstdc++-v3/configure
++++ b/gcc-8.3.0-patched/libstdc++-v3/configure
 @@ -28127,6 +28127,17 @@ eval as_val=\$$as_ac_var
  #define `$as_echo "HAVE_$ac_func" | $as_tr_cpp` 1
  _ACEOF
@@ -199,10 +238,10 @@ index 5535bfa2b5a..b9883d413f6 100755
  done
  
  
-diff --git a/libstdc++-v3/configure.ac b/libstdc++-v3/configure.ac
-index 0ef96270c9c..dde1c4da944 100644
---- a/libstdc++-v3/configure.ac
-+++ b/libstdc++-v3/configure.ac
+diff --git a/gcc-8.3.0/libstdc++-v3/configure.ac b/gcc-8.3.0-patched/libstdc++-v3/configure.ac
+index 0ef9627..dde1c4d 100644
+--- a/gcc-8.3.0/libstdc++-v3/configure.ac
++++ b/gcc-8.3.0-patched/libstdc++-v3/configure.ac
 @@ -263,6 +263,7 @@ if $GLIBCXX_IS_NATIVE; then
  
    AC_CHECK_FUNCS(__cxa_thread_atexit_impl __cxa_thread_atexit)
@@ -219,10 +258,10 @@ index 0ef96270c9c..dde1c4da944 100644
  GLIBCXX_ENABLE_FILESYSTEM_TS
  GLIBCXX_CHECK_FILESYSTEM_DEPS
  
-diff --git a/libstdc++-v3/crossconfig.m4 b/libstdc++-v3/crossconfig.m4
-index cb6e3afff3d..669d87f7602 100644
---- a/libstdc++-v3/crossconfig.m4
-+++ b/libstdc++-v3/crossconfig.m4
+diff --git a/gcc-8.3.0/libstdc++-v3/crossconfig.m4 b/gcc-8.3.0-patched/libstdc++-v3/crossconfig.m4
+index cb6e3af..669d87f 100644
+--- a/gcc-8.3.0/libstdc++-v3/crossconfig.m4
++++ b/gcc-8.3.0-patched/libstdc++-v3/crossconfig.m4
 @@ -199,6 +199,7 @@ case "${host}" in
      GLIBCXX_CHECK_MATH_SUPPORT
      GLIBCXX_CHECK_STDLIB_SUPPORT
@@ -231,10 +270,10 @@ index cb6e3afff3d..669d87f7602 100644
      ;;
    *-netbsd*)
      SECTION_FLAGS='-ffunction-sections -fdata-sections'
-diff --git a/libstdc++-v3/include/bits/fs_dir.h b/libstdc++-v3/include/bits/fs_dir.h
-index 9ee1cb66b61..6b332e171cf 100644
---- a/libstdc++-v3/include/bits/fs_dir.h
-+++ b/libstdc++-v3/include/bits/fs_dir.h
+diff --git a/gcc-8.3.0/libstdc++-v3/include/bits/fs_dir.h b/gcc-8.3.0-patched/libstdc++-v3/include/bits/fs_dir.h
+index 9ee1cb6..6b332e1 100644
+--- a/gcc-8.3.0/libstdc++-v3/include/bits/fs_dir.h
++++ b/gcc-8.3.0-patched/libstdc++-v3/include/bits/fs_dir.h
 @@ -138,13 +138,8 @@ _GLIBCXX_BEGIN_NAMESPACE_CXX11
        refresh(__ec);
      }
@@ -263,10 +302,10 @@ index 9ee1cb66b61..6b332e171cf 100644
        return status(__ec).type();
      }
  
-diff --git a/libstdc++-v3/include/bits/fs_path.h b/libstdc++-v3/include/bits/fs_path.h
-index fb85d489fd8..e3938d06d59 100644
---- a/libstdc++-v3/include/bits/fs_path.h
-+++ b/libstdc++-v3/include/bits/fs_path.h
+diff --git a/gcc-8.3.0/libstdc++-v3/include/bits/fs_path.h b/gcc-8.3.0-patched/libstdc++-v3/include/bits/fs_path.h
+index fb85d48..e3938d0 100644
+--- a/gcc-8.3.0/libstdc++-v3/include/bits/fs_path.h
++++ b/gcc-8.3.0-patched/libstdc++-v3/include/bits/fs_path.h
 @@ -37,11 +37,11 @@
  #include <vector>
  #include <locale>
@@ -641,10 +680,10 @@ index fb85d489fd8..e3938d06d59 100644
    inline path::iterator&
    path::iterator::operator++()
    {
-diff --git a/libstdc++-v3/include/bits/fstream.tcc b/libstdc++-v3/include/bits/fstream.tcc
-index f23ff7af4eb..d9eff00823a 100644
---- a/libstdc++-v3/include/bits/fstream.tcc
-+++ b/libstdc++-v3/include/bits/fstream.tcc
+diff --git a/gcc-8.3.0/libstdc++-v3/include/bits/fstream.tcc b/gcc-8.3.0-patched/libstdc++-v3/include/bits/fstream.tcc
+index f23ff7a..d9eff00 100644
+--- a/gcc-8.3.0/libstdc++-v3/include/bits/fstream.tcc
++++ b/gcc-8.3.0-patched/libstdc++-v3/include/bits/fstream.tcc
 @@ -207,6 +207,42 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        return __ret;
      }
@@ -688,10 +727,10 @@ index f23ff7af4eb..d9eff00823a 100644
    template<typename _CharT, typename _Traits>
      typename basic_filebuf<_CharT, _Traits>::__filebuf_type*
      basic_filebuf<_CharT, _Traits>::
-diff --git a/libstdc++-v3/include/experimental/bits/fs_path.h b/libstdc++-v3/include/experimental/bits/fs_path.h
-index 088d62f8f43..340cc59d541 100644
---- a/libstdc++-v3/include/experimental/bits/fs_path.h
-+++ b/libstdc++-v3/include/experimental/bits/fs_path.h
+diff --git a/gcc-8.3.0/libstdc++-v3/include/experimental/bits/fs_path.h b/gcc-8.3.0-patched/libstdc++-v3/include/experimental/bits/fs_path.h
+index 088d62f..340cc59 100644
+--- a/gcc-8.3.0/libstdc++-v3/include/experimental/bits/fs_path.h
++++ b/gcc-8.3.0-patched/libstdc++-v3/include/experimental/bits/fs_path.h
 @@ -79,8 +79,11 @@ _GLIBCXX_BEGIN_NAMESPACE_CXX11
    /// A filesystem path.
    class path
@@ -836,10 +875,10 @@ index 088d62f8f43..340cc59d541 100644
    inline path::iterator
    path::begin() const
    {
-diff --git a/libstdc++-v3/include/std/fstream b/libstdc++-v3/include/std/fstream
-index 3a5895d68b0..740d12d3bb6 100644
---- a/libstdc++-v3/include/std/fstream
-+++ b/libstdc++-v3/include/std/fstream
+diff --git a/gcc-8.3.0/libstdc++-v3/include/std/fstream b/gcc-8.3.0-patched/libstdc++-v3/include/std/fstream
+index 3a5895d..740d12d 100644
+--- a/gcc-8.3.0/libstdc++-v3/include/std/fstream
++++ b/gcc-8.3.0-patched/libstdc++-v3/include/std/fstream
 @@ -304,6 +304,17 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        __filebuf_type*
        open(const char* __s, ios_base::openmode __mode);
@@ -1008,10 +1047,139 @@ index 3a5895d68b0..740d12d3bb6 100644
  #if __cplusplus >= 201103L
        /**
         *  @brief  Opens an external file.
-diff --git a/libstdc++-v3/src/filesystem/dir-common.h b/libstdc++-v3/src/filesystem/dir-common.h
-index 21ba01ca970..03875819d04 100644
---- a/libstdc++-v3/src/filesystem/dir-common.h
-+++ b/libstdc++-v3/src/filesystem/dir-common.h
+diff --git a/gcc-8.3.0/libstdc++-v3/libsupc++/atexit_thread.cc b/gcc-8.3.0-patched/libstdc++-v3/libsupc++/atexit_thread.cc
+index de920d7..1374ff8 100644
+--- a/gcc-8.3.0/libstdc++-v3/libsupc++/atexit_thread.cc
++++ b/gcc-8.3.0-patched/libstdc++-v3/libsupc++/atexit_thread.cc
+@@ -149,14 +149,6 @@ __cxxabiv1::__cxa_thread_atexit (void (*dtor)(void *), void *obj, void */*dso_ha
+   new_elt->destructor = dtor;
+   new_elt->object = obj;
+   new_elt->next = first;
+-#ifdef _GLIBCXX_THREAD_ATEXIT_WIN32
+-  /* Store the DLL address for a later call to FreeLibrary in new_elt and
+-     increment DLL load count.  This blocks the unloading of the DLL
+-     before the thread-local dtors have been called.  This does NOT help
+-     if FreeLibrary/dlclose is called in excess. */
+-  GetModuleHandleExW (GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+-		      (LPCWSTR) dtor, &new_elt->dll);
+-#endif
+ 
+   if (__gthread_active_p ())
+     __gthread_setspecific (key, new_elt);
+diff --git a/gcc-8.3.0/libstdc++-v3/libsupc++/del_opa.cc b/gcc-8.3.0-patched/libstdc++-v3/libsupc++/del_opa.cc
+index 71f384d..9ebac07 100644
+--- a/gcc-8.3.0/libstdc++-v3/libsupc++/del_opa.cc
++++ b/gcc-8.3.0-patched/libstdc++-v3/libsupc++/del_opa.cc
+@@ -50,7 +50,7 @@ operator delete(void* ptr, std::align_val_t) _GLIBCXX_USE_NOEXCEPT
+     || _GLIBCXX_HAVE_MEMALIGN
+   std::free (ptr);
+ #elif _GLIBCXX_HAVE__ALIGNED_MALLOC
+-  _aligned_free (ptr);
++  __mingw_aligned_free (ptr);
+ #else
+   if (ptr)
+     std::free (((void **) ptr)[-1]); // See aligned_alloc in new_opa.cc
+diff --git a/gcc-8.3.0/libstdc++-v3/libsupc++/new_opa.cc b/gcc-8.3.0-patched/libstdc++-v3/libsupc++/new_opa.cc
+index 68eac5b..309a297 100644
+--- a/gcc-8.3.0/libstdc++-v3/libsupc++/new_opa.cc
++++ b/gcc-8.3.0-patched/libstdc++-v3/libsupc++/new_opa.cc
+@@ -48,7 +48,7 @@ using ::aligned_alloc;
+ #elif _GLIBCXX_HAVE__ALIGNED_MALLOC
+ static inline void*
+ aligned_alloc (std::size_t al, std::size_t sz)
+-{ return _aligned_malloc(sz, al); }
++{ return __mingw_aligned_malloc(sz, al); }
+ #elif _GLIBCXX_HAVE_POSIX_MEMALIGN
+ static inline void*
+ aligned_alloc (std::size_t al, std::size_t sz)
+diff --git a/gcc-8.3.0/libstdc++-v3/libsupc++/typeinfo b/gcc-8.3.0-patched/libstdc++-v3/libsupc++/typeinfo
+index a186feb..449127d 100644
+--- a/gcc-8.3.0/libstdc++-v3/libsupc++/typeinfo
++++ b/gcc-8.3.0-patched/libstdc++-v3/libsupc++/typeinfo
+@@ -116,7 +116,9 @@ namespace std
+     { return (__name[0] == '*' && __arg.__name[0] == '*')
+ 	? __name < __arg.__name
+ 	: __builtin_strcmp (__name, __arg.__name) < 0; }
+-
++#ifdef __clang__
++__attribute__((always_inline))
++#endif
+     bool operator==(const type_info& __arg) const _GLIBCXX_NOEXCEPT
+     {
+       return ((__name == __arg.__name)
+@@ -128,7 +130,9 @@ namespace std
+     // and therefore address comparisons are sufficient.
+     bool before(const type_info& __arg) const _GLIBCXX_NOEXCEPT
+     { return __name < __arg.__name; }
+-
++#ifdef __clang__
++__attribute__((always_inline))
++#endif
+     bool operator==(const type_info& __arg) const _GLIBCXX_NOEXCEPT
+     { return __name == __arg.__name; }
+   #endif
+diff --git a/gcc-8.3.0/libstdc++-v3/src/c++11/debug.cc b/gcc-8.3.0-patched/libstdc++-v3/src/c++11/debug.cc
+index 7c0b540..6a3dfc9 100644
+--- a/gcc-8.3.0/libstdc++-v3/src/c++11/debug.cc
++++ b/gcc-8.3.0-patched/libstdc++-v3/src/c++11/debug.cc
+@@ -671,7 +671,7 @@ namespace
+     else if (__builtin_strcmp(name, "address") == 0)
+       {
+ 	char buf[64];
+-	int ret = __builtin_sprintf(buf, "%p", inst._M_address);
++	int ret = sprintf(buf, "%p", inst._M_address);
+ 	print_word(ctx, buf, ret);
+       }
+     else
+@@ -723,7 +723,7 @@ namespace
+ 	else if (__builtin_strcmp(name, "sequence") == 0)
+ 	  {
+ 	    assert(iterator._M_sequence);
+-	    int written = __builtin_sprintf(buf, "%p", iterator._M_sequence);
++	    int written = sprintf(buf, "%p", iterator._M_sequence);
+ 	    print_word(ctx, buf, written);
+ 	  }
+ 	else if (__builtin_strcmp(name, "seq_type") == 0)
+@@ -808,7 +808,7 @@ namespace
+       }
+ 
+     int written
+-      = __builtin_sprintf(buf, "@ 0x%p {\n", inst._M_address);
++      = sprintf(buf, "@ 0x%p {\n", inst._M_address);
+     print_word(ctx, buf, written);
+ 
+     if (inst._M_type)
+@@ -864,7 +864,7 @@ namespace
+ 		}
+ 
+ 	      int written
+-		= __builtin_sprintf(buf, "@ 0x%p\n", ite._M_sequence);
++		= sprintf(buf, "@ 0x%p\n", ite._M_sequence);
+ 	      print_word(ctx, buf, written);
+ 	    }
+ 
+@@ -962,7 +962,7 @@ namespace
+ 	    if (param._M_kind == _Parameter::__integer)
+ 	      {
+ 		int written
+-		  = __builtin_sprintf(buf, "%ld",
++		  = sprintf(buf, "%ld",
+ 				      param._M_variant._M_integer._M_value);
+ 		print_word(ctx, buf, written);
+ 	      }
+@@ -1023,7 +1023,7 @@ namespace __gnu_debug
+     if (_M_line > 0)
+       {
+ 	char buf[64];
+-	int written = __builtin_sprintf(buf, "%u:", _M_line);
++	int written = sprintf(buf, "%u:", _M_line);
+ 	print_word(ctx, buf, written);
+ 	go_to_next_line = true;
+       }
+diff --git a/gcc-8.3.0/libstdc++-v3/src/filesystem/dir-common.h b/gcc-8.3.0-patched/libstdc++-v3/src/filesystem/dir-common.h
+index 21ba01c..0387581 100644
+--- a/gcc-8.3.0/libstdc++-v3/src/filesystem/dir-common.h
++++ b/gcc-8.3.0-patched/libstdc++-v3/src/filesystem/dir-common.h
 @@ -26,6 +26,9 @@
  #define _GLIBCXX_DIR_COMMON_H 1
  
@@ -1127,10 +1295,10 @@ index 21ba01ca970..03875819d04 100644
  {
  #ifdef _GLIBCXX_HAVE_STRUCT_DIRENT_D_TYPE
    switch (d.d_type)
-diff --git a/libstdc++-v3/src/filesystem/dir.cc b/libstdc++-v3/src/filesystem/dir.cc
-index 7e712c553c3..01c3decaba6 100644
---- a/libstdc++-v3/src/filesystem/dir.cc
-+++ b/libstdc++-v3/src/filesystem/dir.cc
+diff --git a/gcc-8.3.0/libstdc++-v3/src/filesystem/dir.cc b/gcc-8.3.0-patched/libstdc++-v3/src/filesystem/dir.cc
+index 7e712c5..01c3dec 100644
+--- a/gcc-8.3.0/libstdc++-v3/src/filesystem/dir.cc
++++ b/gcc-8.3.0-patched/libstdc++-v3/src/filesystem/dir.cc
 @@ -37,6 +37,7 @@
  #include "dir-common.h"
  
@@ -1157,10 +1325,10 @@ index 7e712c553c3..01c3decaba6 100644
      {
        auto sp = std::make_shared<_Dir_stack>();
        sp->push(_Dir{ dirp, p });
-diff --git a/libstdc++-v3/src/filesystem/ops-common.h b/libstdc++-v3/src/filesystem/ops-common.h
-index bc186836bd4..c1b817189a9 100644
---- a/libstdc++-v3/src/filesystem/ops-common.h
-+++ b/libstdc++-v3/src/filesystem/ops-common.h
+diff --git a/gcc-8.3.0/libstdc++-v3/src/filesystem/ops-common.h b/gcc-8.3.0-patched/libstdc++-v3/src/filesystem/ops-common.h
+index bc18683..52978bd 100644
+--- a/gcc-8.3.0/libstdc++-v3/src/filesystem/ops-common.h
++++ b/gcc-8.3.0-patched/libstdc++-v3/src/filesystem/ops-common.h
 @@ -34,12 +34,103 @@
  #  include <sys/stat.h>
  # endif
@@ -1196,7 +1364,7 @@ index bc186836bd4..c1b817189a9 100644
 +  inline int stat(const wchar_t* path, stat_type* buffer)
 +  { return ::_wstat(path, buffer); }
 +
-+  inline lstat(const wchar_t* path, stat_type* buffer)
++  inline int lstat(const wchar_t* path, stat_type* buffer)
 +  {
 +    // TODO symlinks not currently supported
 +    return stat(path, buffer);
@@ -1313,10 +1481,10 @@ index bc186836bd4..c1b817189a9 100644
  #ifdef S_ISSOCK // not present until POSIX:2001
      else if (S_ISSOCK(st.st_mode))
        return file_type::socket;
-diff --git a/libstdc++-v3/src/filesystem/ops.cc b/libstdc++-v3/src/filesystem/ops.cc
-index de290625e54..40cadbf6270 100644
---- a/libstdc++-v3/src/filesystem/ops.cc
-+++ b/libstdc++-v3/src/filesystem/ops.cc
+diff --git a/gcc-8.3.0/libstdc++-v3/src/filesystem/ops.cc b/gcc-8.3.0-patched/libstdc++-v3/src/filesystem/ops.cc
+index de29062..40cadbf 100644
+--- a/gcc-8.3.0/libstdc++-v3/src/filesystem/ops.cc
++++ b/gcc-8.3.0-patched/libstdc++-v3/src/filesystem/ops.cc
 @@ -47,20 +47,17 @@
  #if !_GLIBCXX_USE_UTIMENSAT && _GLIBCXX_HAVE_UTIME_H
  # include <utime.h> // utime
@@ -1769,10 +1937,10 @@ index de290625e54..40cadbf6270 100644
 +  return p;
  }
  
-diff --git a/libstdc++-v3/src/filesystem/path.cc b/libstdc++-v3/src/filesystem/path.cc
-index 899d94e0067..fb70d30fdca 100644
---- a/libstdc++-v3/src/filesystem/path.cc
-+++ b/libstdc++-v3/src/filesystem/path.cc
+diff --git a/gcc-8.3.0/libstdc++-v3/src/filesystem/path.cc b/gcc-8.3.0-patched/libstdc++-v3/src/filesystem/path.cc
+index 899d94e..fb70d30 100644
+--- a/gcc-8.3.0/libstdc++-v3/src/filesystem/path.cc
++++ b/gcc-8.3.0-patched/libstdc++-v3/src/filesystem/path.cc
 @@ -61,6 +61,12 @@ path::replace_filename(const path& replacement)
    return *this;
  }
@@ -1844,10 +2012,10 @@ index 899d94e0067..fb70d30fdca 100644
    }
  
  _GLIBCXX_END_NAMESPACE_CXX11
-diff --git a/libstdc++-v3/src/filesystem/std-dir.cc b/libstdc++-v3/src/filesystem/std-dir.cc
-index 98eb22ab920..4c9a287ad80 100644
---- a/libstdc++-v3/src/filesystem/std-dir.cc
-+++ b/libstdc++-v3/src/filesystem/std-dir.cc
+diff --git a/gcc-8.3.0/libstdc++-v3/src/filesystem/std-dir.cc b/gcc-8.3.0-patched/libstdc++-v3/src/filesystem/std-dir.cc
+index 98eb22a..4c9a287 100644
+--- a/gcc-8.3.0/libstdc++-v3/src/filesystem/std-dir.cc
++++ b/gcc-8.3.0-patched/libstdc++-v3/src/filesystem/std-dir.cc
 @@ -37,6 +37,7 @@
  #include "dir-common.h"
  
@@ -1874,10 +2042,10 @@ index 98eb22ab920..4c9a287ad80 100644
      {
        if (ecptr)
  	ecptr->clear();
-diff --git a/libstdc++-v3/src/filesystem/std-ops.cc b/libstdc++-v3/src/filesystem/std-ops.cc
-index c0742d73b5c..e266fa6d3f8 100644
---- a/libstdc++-v3/src/filesystem/std-ops.cc
-+++ b/libstdc++-v3/src/filesystem/std-ops.cc
+diff --git a/gcc-8.3.0/libstdc++-v3/src/filesystem/std-ops.cc b/gcc-8.3.0-patched/libstdc++-v3/src/filesystem/std-ops.cc
+index c0742d7..e266fa6 100644
+--- a/gcc-8.3.0/libstdc++-v3/src/filesystem/std-ops.cc
++++ b/gcc-8.3.0-patched/libstdc++-v3/src/filesystem/std-ops.cc
 @@ -25,6 +25,7 @@
  #ifndef _GLIBCXX_USE_CXX11_ABI
  # define _GLIBCXX_USE_CXX11_ABI 1
@@ -2535,10 +2703,10 @@ index c0742d73b5c..e266fa6d3f8 100644
  }
  
  fs::path
-diff --git a/libstdc++-v3/src/filesystem/std-path.cc b/libstdc++-v3/src/filesystem/std-path.cc
-index c5bf8099036..f6c0b8bb0f6 100644
---- a/libstdc++-v3/src/filesystem/std-path.cc
-+++ b/libstdc++-v3/src/filesystem/std-path.cc
+diff --git a/gcc-8.3.0/libstdc++-v3/src/filesystem/std-path.cc b/gcc-8.3.0-patched/libstdc++-v3/src/filesystem/std-path.cc
+index c5bf809..f6c0b8b 100644
+--- a/gcc-8.3.0/libstdc++-v3/src/filesystem/std-path.cc
++++ b/gcc-8.3.0-patched/libstdc++-v3/src/filesystem/std-path.cc
 @@ -38,6 +38,66 @@ fs::filesystem_error::~filesystem_error() = default;
  
  constexpr path::value_type path::preferred_separator;
@@ -2755,6 +2923,3 @@ index c5bf8099036..f6c0b8bb0f6 100644
    }
  
  _GLIBCXX_END_NAMESPACE_CXX11
--- 
-2.20.1
-

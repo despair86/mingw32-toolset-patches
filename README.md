@@ -24,9 +24,10 @@ the MINGW-packages AUR (packages: `mingw-w64-clang`, `mingw-w64-gcc`). These pat
 All of these are patches on the GCC source tarball (i.e. with all frontends included, except D). Internally, I have abandoned GCC for LLVM, except for `libstdc++-v6` (Apple `libc++` is linked to the UCRT, which imposes a separate runtime deliverable.), so this section is mostly of public interest.
 - `pick-libc.patch` (override libc selection: default is Microsoft libc v6.1-7.0, this is used to pick libc v8+ or the new UCRT)
 - `std-fs.patch` (enable `std::experimental::filesystem` for Windows NT targets)
-- `std-fs-gcc-8.3.0.patch` (same as above, but rebased on GCC 8.3 release)
 - `suffix.patch` (some Pascal calling convention fix)
 - `libg++-win32.patch` (patch held over since g++ 5.x)
+- `clang-inline-typeinfo-bug.patch` (See https://github.com/msys2/MINGW-packages/issues/1677. This bug remains in LLVM trunk as of 19-03-19)
+- `gcc-8.3.0-dist.patch` (A patch which combines all of the above changes into a single patch rebased on GCC 8.3. Please continue to use the individual patches on older versions.)
 
 ## mingw-w64 runtime/CRT patches:
 
