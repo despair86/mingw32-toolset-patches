@@ -1,0 +1,200 @@
+diff --git a/gcc-9.2.0/gcc/cgraphclones.c b/gcc-9.2.0-patched/gcc/cgraphclones.c
+index 15f7e11..12b76fe 100644
+--- a/gcc-9.2.0/gcc/cgraphclones.c
++++ b/gcc-9.2.0-patched/gcc/cgraphclones.c
+@@ -524,7 +524,8 @@ static GTY(()) hash_map<const char *, unsigned> *clone_fn_ids;
+    each NAME) unspecified number.  If clone numbering is not needed
+    then the two argument clone_function_name should be used instead.
+    Should not be called directly except for by
+-   lto-partition.c:privatize_symbol_name_1.  */
++   lto-partition.c:privatize_symbol_name_1.  Final stdcall @N suffixes
++   are maintained.  */
+ 
+ tree
+ clone_function_name_numbered (const char *name, const char *suffix)
+@@ -563,12 +564,23 @@ clone_function_name (const char *name, const char *suffix,
+ {
+   size_t len = strlen (name);
+   char *tmp_name, *prefix;
++  char *at_suffix = NULL;
+ 
+   prefix = XALLOCAVEC (char, len + strlen (suffix) + 2);
++  /* name + 1 to skip fastcall which begins with '@' */
++  at_suffix = strchr ((char*)name + 1, '@');
++  size_t at_suffix_len = 0;
++  if (at_suffix)
++    {
++      at_suffix_len = strlen (at_suffix);
++      len -= at_suffix_len;
++    }
+   memcpy (prefix, name, len);
+   strcpy (prefix + len + 1, suffix);
+   prefix[len] = symbol_table::symbol_suffix_separator ();
+   ASM_FORMAT_PRIVATE_NAME (tmp_name, prefix, number);
++  if (at_suffix)
++    strcat (tmp_name, at_suffix);
+   return get_identifier (tmp_name);
+ }
+ 
+diff --git a/gcc-9.2.0/gcc/config/i386/cygming.opt b/gcc-9.2.0-patched/gcc/config/i386/cygming.opt
+index ebf5b49..10561d0 100644
+--- a/gcc-9.2.0/gcc/config/i386/cygming.opt
++++ b/gcc-9.2.0-patched/gcc/config/i386/cygming.opt
+@@ -22,6 +22,9 @@ mconsole
+ Target RejectNegative
+ Create console application.
+ 
++mcrtdll=
++Target RejectNegative Joined
++
+ mdll
+ Target RejectNegative
+ Generate code for a DLL.
+diff --git a/gcc-9.2.0/gcc/config/i386/mingw32.h b/gcc-9.2.0-patched/gcc/config/i386/mingw32.h
+index 5f0c783..6d61d6f 100644
+--- a/gcc-9.2.0/gcc/config/i386/mingw32.h
++++ b/gcc-9.2.0-patched/gcc/config/i386/mingw32.h
+@@ -165,7 +165,7 @@ along with GCC; see the file COPYING3.  If not see
+ #define REAL_LIBGCC_SPEC \
+   "%{mthreads:-lmingwthrd} -lmingw32 \
+    " SHARED_LIBGCC_SPEC " \
+-   -lmoldname -lmingwex -lmsvcrt"
++   -lmoldname -lmingwex %{!mcrtdll=*:-lmsvcrt} %{mcrtdll=*:-l%*}"
+ 
+ #undef STARTFILE_SPEC
+ #define STARTFILE_SPEC "%{shared|mdll:dllcrt2%O%s} \
+diff --git a/gcc-9.2.0/gcc/defaults.h b/gcc-9.2.0-patched/gcc/defaults.h
+index b753425..ca089ea 100644
+--- a/gcc-9.2.0/gcc/defaults.h
++++ b/gcc-9.2.0-patched/gcc/defaults.h
+@@ -51,7 +51,7 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+ # define ASM_FORMAT_PRIVATE_NAME(OUTPUT, NAME, LABELNO) \
+   do { const char *const name_ = (NAME); \
+        char *const output_ = (OUTPUT) = \
+-	 (char *) alloca (strlen (name_) + 32); \
++	 (char *) alloca (strlen (name_) + 35); \
+        sprintf (output_, ASM_PN_FORMAT, name_, (unsigned long)(LABELNO)); \
+   } while (0)
+ #endif
+diff --git a/gcc-9.2.0/gcc/fortran/trans-expr.c b/gcc-9.2.0-patched/gcc/fortran/trans-expr.c
+index afe08fc..482d6be 100644
+--- a/gcc-9.2.0/gcc/fortran/trans-expr.c
++++ b/gcc-9.2.0-patched/gcc/fortran/trans-expr.c
+@@ -3079,7 +3079,7 @@ gfc_conv_power_op (gfc_se * se, gfc_expr * expr)
+       int kind, ikind, bit_size;
+ 
+       v = wlhs.to_shwi ();
+-      w = abs (v);
++      w = abs ((long)v);
+ 
+       kind = expr->value.op.op1->ts.kind;
+       ikind = gfc_validate_kind (BT_INTEGER, kind, false);
+diff --git a/gcc-9.2.0/libgfortran/intrinsics/random.c b/gcc-9.2.0-patched/libgfortran/intrinsics/random.c
+index 7476439..7677edf 100644
+--- a/gcc-9.2.0/libgfortran/intrinsics/random.c
++++ b/gcc-9.2.0-patched/libgfortran/intrinsics/random.c
+@@ -306,13 +306,6 @@ lcg_parkmiller(uint32_t seed)
+ static int
+ getosrandom (void *buf, size_t buflen)
+ {
+-  /* rand_s is available in MinGW-w64 but not plain MinGW.  */
+-#if defined(__MINGW64_VERSION_MAJOR)
+-  unsigned int* b = buf;
+-  for (size_t i = 0; i < buflen / sizeof (unsigned int); i++)
+-    rand_s (&b[i]);
+-  return buflen;
+-#else
+ #ifdef HAVE_GETENTROPY
+   if (getentropy (buf, buflen) == 0)
+     return 0;
+@@ -347,7 +340,6 @@ getosrandom (void *buf, size_t buflen)
+       seed = lcg_parkmiller (seed);
+     }
+   return buflen;
+-#endif /* __MINGW64_VERSION_MAJOR  */
+ }
+ 
+ 
+diff --git a/gcc-9.2.0/libstdc++-v3/libsupc++/atexit_thread.cc b/gcc-9.2.0-patched/libstdc++-v3/libsupc++/atexit_thread.cc
+index 2533425..835a229 100644
+--- a/gcc-9.2.0/libstdc++-v3/libsupc++/atexit_thread.cc
++++ b/gcc-9.2.0-patched/libstdc++-v3/libsupc++/atexit_thread.cc
+@@ -149,14 +149,6 @@ __cxxabiv1::__cxa_thread_atexit (void (*dtor)(void *), void *obj, void */*dso_ha
+   new_elt->destructor = dtor;
+   new_elt->object = obj;
+   new_elt->next = first;
+-#ifdef _GLIBCXX_THREAD_ATEXIT_WIN32
+-  /* Store the DLL address for a later call to FreeLibrary in new_elt and
+-     increment DLL load count.  This blocks the unloading of the DLL
+-     before the thread-local dtors have been called.  This does NOT help
+-     if FreeLibrary/dlclose is called in excess. */
+-  GetModuleHandleExW (GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+-		      (LPCWSTR) dtor, &new_elt->dll);
+-#endif
+ 
+   if (__gthread_active_p ())
+     __gthread_setspecific (key, new_elt);
+diff --git a/gcc-9.2.0/libstdc++-v3/libsupc++/del_opa.cc b/gcc-9.2.0-patched/libstdc++-v3/libsupc++/del_opa.cc
+index 73a600f..d60f747 100644
+--- a/gcc-9.2.0/libstdc++-v3/libsupc++/del_opa.cc
++++ b/gcc-9.2.0-patched/libstdc++-v3/libsupc++/del_opa.cc
+@@ -50,7 +50,7 @@ operator delete(void* ptr, std::align_val_t) noexcept
+     || _GLIBCXX_HAVE_MEMALIGN
+   std::free (ptr);
+ #elif _GLIBCXX_HAVE__ALIGNED_MALLOC
+-  _aligned_free (ptr);
++  __mingw_aligned_free (ptr);
+ #else
+   if (ptr)
+     std::free (((void **) ptr)[-1]); // See aligned_alloc in new_opa.cc
+diff --git a/gcc-9.2.0/libstdc++-v3/libsupc++/new_opa.cc b/gcc-9.2.0-patched/libstdc++-v3/libsupc++/new_opa.cc
+index 0303ecd..65cbded 100644
+--- a/gcc-9.2.0/libstdc++-v3/libsupc++/new_opa.cc
++++ b/gcc-9.2.0-patched/libstdc++-v3/libsupc++/new_opa.cc
+@@ -49,7 +49,7 @@ using ::aligned_alloc;
+ #elif _GLIBCXX_HAVE__ALIGNED_MALLOC
+ static inline void*
+ aligned_alloc (std::size_t al, std::size_t sz)
+-{ return _aligned_malloc(sz, al); }
++{ return __mingw_aligned_malloc(sz, al); }
+ #elif _GLIBCXX_HAVE_POSIX_MEMALIGN
+ static inline void*
+ aligned_alloc (std::size_t al, std::size_t sz)
+diff --git a/gcc-9.2.0/libstdc++-v3/src/c++11/random.cc b/gcc-9.2.0-patched/libstdc++-v3/src/c++11/random.cc
+index 0bb6b6b..c8212fb 100644
+--- a/gcc-9.2.0/libstdc++-v3/src/c++11/random.cc
++++ b/gcc-9.2.0-patched/libstdc++-v3/src/c++11/random.cc
+@@ -91,18 +91,6 @@ namespace std _GLIBCXX_VISIBILITY(default)
+       return val;
+     }
+ #endif
+-
+-#ifdef _GLIBCXX_USE_CRT_RAND_S
+-# pragma GCC poison _M_mt
+-    unsigned int
+-    __winxp_rand_s()
+-    {
+-      unsigned int val;
+-      if (::rand_s(&val) != 0)
+-	std::__throw_runtime_error(__N("random_device: rand_s failed"));
+-      return val;
+-    }
+-#endif
+   }
+ 
+   void
+@@ -190,11 +178,7 @@ namespace std _GLIBCXX_VISIBILITY(default)
+   random_device::result_type
+   random_device::_M_getval_pretr1()
+   {
+-#ifdef _GLIBCXX_USE_CRT_RAND_S
+-    return __winxp_rand_s();
+-#else
+     return _M_mt();
+-#endif
+   }
+ 
+   double
+diff --git a/gcc-9.2.0-patched/out b/gcc-9.2.0-patched/out
+new file mode 100644
+index 0000000..e69de29

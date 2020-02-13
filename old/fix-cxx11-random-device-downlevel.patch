@@ -1,0 +1,35 @@
+diff --git a/random.cc b/libstdc++-v3/src/c++11/random.cc
+index 0bb6b6b..c8212fb 100644
+--- a/libstdc++-v3/src/c++11/random.cc
++++ b/libstdc++-v3/src/c++11/random.cc
+@@ -91,18 +91,6 @@ namespace std _GLIBCXX_VISIBILITY(default)
+       return val;
+     }
+ #endif
+-
+-#ifdef _GLIBCXX_USE_CRT_RAND_S
+-# pragma GCC poison _M_mt
+-    unsigned int
+-    __winxp_rand_s()
+-    {
+-      unsigned int val;
+-      if (::rand_s(&val) != 0)
+-	std::__throw_runtime_error(__N("random_device: rand_s failed"));
+-      return val;
+-    }
+-#endif
+   }
+ 
+   void
+@@ -190,11 +178,7 @@ namespace std _GLIBCXX_VISIBILITY(default)
+   random_device::result_type
+   random_device::_M_getval_pretr1()
+   {
+-#ifdef _GLIBCXX_USE_CRT_RAND_S
+-    return __winxp_rand_s();
+-#else
+     return _M_mt();
+-#endif
+   }
+ 
+   double
