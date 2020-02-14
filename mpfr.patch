@@ -1,0 +1,5 @@
+#define mpfr_add_one_ulp(x,r) \
+ (mpfr_sgn (x) > 0 ? mpfr_nextabove (x) : mpfr_nextbelow (x))
+#define mpfr_sub_one_ulp(x,r) \
+ (mpfr_sgn (x) > 0 ? mpfr_nextbelow (x) : mpfr_nextabove (x))
+
