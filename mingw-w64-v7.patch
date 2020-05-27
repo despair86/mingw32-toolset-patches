@@ -1,7 +1,7 @@
-diff --git a/mingw-w64-v7.0.0/mingw-w64-headers/crt/ctype.h b/mingw-w64-v7.0.0-patched/mingw-w64-headers/crt/ctype.h
+diff --git a/mingw-w64-v7.0.0/mingw-w64-headers/crt/ctype.h b/mingw-w64-v7.0.0/mingw-w64-headers/crt/ctype.h
 index 9d09833..9b45a9e 100644
 --- a/mingw-w64-v7.0.0/mingw-w64-headers/crt/ctype.h
-+++ b/mingw-w64-v7.0.0-patched/mingw-w64-headers/crt/ctype.h
++++ b/mingw-w64-v7.0.0/mingw-w64-headers/crt/ctype.h
 @@ -193,7 +193,7 @@ int __cdecl iswblank(wint_t _C);
  #ifndef _CTYPE_DISABLE_MACROS
  
@@ -20,10 +20,10 @@ index 9d09833..9b45a9e 100644
  #endif
  #endif
  _CRTIMP int __cdecl ___mb_cur_max_func(void);
-diff --git a/mingw-w64-v7.0.0/mingw-w64-headers/crt/stdlib.h b/mingw-w64-v7.0.0-patched/mingw-w64-headers/crt/stdlib.h
+diff --git a/mingw-w64-v7.0.0/mingw-w64-headers/crt/stdlib.h b/mingw-w64-v7.0.0/mingw-w64-headers/crt/stdlib.h
 index 7d758f3..e85ef93 100644
 --- a/mingw-w64-v7.0.0/mingw-w64-headers/crt/stdlib.h
-+++ b/mingw-w64-v7.0.0-patched/mingw-w64-headers/crt/stdlib.h
++++ b/mingw-w64-v7.0.0/mingw-w64-headers/crt/stdlib.h
 @@ -106,7 +106,7 @@ extern "C" {
  #define RAND_MAX 0x7fff
  
@@ -42,10 +42,10 @@ index 7d758f3..e85ef93 100644
  #endif
  #endif
  _CRTIMP int __cdecl ___mb_cur_max_func(void);
-diff --git a/mingw-w64-v7.0.0/mingw-w64-headers/include/tdi.h b/mingw-w64-v7.0.0-patched/mingw-w64-headers/include/tdi.h
+diff --git a/mingw-w64-v7.0.0/mingw-w64-headers/include/tdi.h b/mingw-w64-v7.0.0/mingw-w64-headers/include/tdi.h
 index 3120070..6c5298b 100644
 --- a/mingw-w64-v7.0.0/mingw-w64-headers/include/tdi.h
-+++ b/mingw-w64-v7.0.0-patched/mingw-w64-headers/include/tdi.h
++++ b/mingw-w64-v7.0.0/mingw-w64-headers/include/tdi.h
 @@ -24,8 +24,8 @@
  #define __TDI_H
  
@@ -57,10 +57,10 @@ index 3120070..6c5298b 100644
  
  #ifdef __cplusplus
  extern "C" {
-diff --git a/mingw-w64-v7.0.0/mingw-w64-libraries/winpthreads/src/thread.c b/mingw-w64-v7.0.0-patched/mingw-w64-libraries/winpthreads/src/thread.c
+diff --git a/mingw-w64-v7.0.0/mingw-w64-libraries/winpthreads/src/thread.c b/mingw-w64-v7.0.0/mingw-w64-libraries/winpthreads/src/thread.c
 index 1b12edb..d214376 100644
 --- a/mingw-w64-v7.0.0/mingw-w64-libraries/winpthreads/src/thread.c
-+++ b/mingw-w64-v7.0.0-patched/mingw-w64-libraries/winpthreads/src/thread.c
++++ b/mingw-w64-v7.0.0/mingw-w64-libraries/winpthreads/src/thread.c
 @@ -30,6 +30,7 @@
  #include "thread.h"
  #include "misc.h"

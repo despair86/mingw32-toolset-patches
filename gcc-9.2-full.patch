@@ -1,7 +1,7 @@
-diff --git a/gcc-9.2.0/gcc/cgraphclones.c b/gcc-9.2.0-patched/gcc/cgraphclones.c
+diff --git a/gcc-9.2.0/gcc/cgraphclones.c b/gcc-9.2.0/gcc/cgraphclones.c
 index 15f7e11..12b76fe 100644
 --- a/gcc-9.2.0/gcc/cgraphclones.c
-+++ b/gcc-9.2.0-patched/gcc/cgraphclones.c
++++ b/gcc-9.2.0/gcc/cgraphclones.c
 @@ -524,7 +524,8 @@ static GTY(()) hash_map<const char *, unsigned> *clone_fn_ids;
     each NAME) unspecified number.  If clone numbering is not needed
     then the two argument clone_function_name should be used instead.
@@ -36,10 +36,10 @@ index 15f7e11..12b76fe 100644
    return get_identifier (tmp_name);
  }
  
-diff --git a/gcc-9.2.0/gcc/config/i386/cygming.opt b/gcc-9.2.0-patched/gcc/config/i386/cygming.opt
+diff --git a/gcc-9.2.0/gcc/config/i386/cygming.opt b/gcc-9.2.0/gcc/config/i386/cygming.opt
 index ebf5b49..10561d0 100644
 --- a/gcc-9.2.0/gcc/config/i386/cygming.opt
-+++ b/gcc-9.2.0-patched/gcc/config/i386/cygming.opt
++++ b/gcc-9.2.0/gcc/config/i386/cygming.opt
 @@ -22,6 +22,9 @@ mconsole
  Target RejectNegative
  Create console application.
@@ -50,10 +50,10 @@ index ebf5b49..10561d0 100644
  mdll
  Target RejectNegative
  Generate code for a DLL.
-diff --git a/gcc-9.2.0/gcc/config/i386/mingw32.h b/gcc-9.2.0-patched/gcc/config/i386/mingw32.h
+diff --git a/gcc-9.2.0/gcc/config/i386/mingw32.h b/gcc-9.2.0/gcc/config/i386/mingw32.h
 index 5f0c783..6d61d6f 100644
 --- a/gcc-9.2.0/gcc/config/i386/mingw32.h
-+++ b/gcc-9.2.0-patched/gcc/config/i386/mingw32.h
++++ b/gcc-9.2.0/gcc/config/i386/mingw32.h
 @@ -165,7 +165,7 @@ along with GCC; see the file COPYING3.  If not see
  #define REAL_LIBGCC_SPEC \
    "%{mthreads:-lmingwthrd} -lmingw32 \
@@ -63,10 +63,10 @@ index 5f0c783..6d61d6f 100644
  
  #undef STARTFILE_SPEC
  #define STARTFILE_SPEC "%{shared|mdll:dllcrt2%O%s} \
-diff --git a/gcc-9.2.0/gcc/defaults.h b/gcc-9.2.0-patched/gcc/defaults.h
+diff --git a/gcc-9.2.0/gcc/defaults.h b/gcc-9.2.0/gcc/defaults.h
 index b753425..ca089ea 100644
 --- a/gcc-9.2.0/gcc/defaults.h
-+++ b/gcc-9.2.0-patched/gcc/defaults.h
++++ b/gcc-9.2.0/gcc/defaults.h
 @@ -51,7 +51,7 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
  # define ASM_FORMAT_PRIVATE_NAME(OUTPUT, NAME, LABELNO) \
    do { const char *const name_ = (NAME); \
@@ -76,10 +76,10 @@ index b753425..ca089ea 100644
         sprintf (output_, ASM_PN_FORMAT, name_, (unsigned long)(LABELNO)); \
    } while (0)
  #endif
-diff --git a/gcc-9.2.0/gcc/fortran/trans-expr.c b/gcc-9.2.0-patched/gcc/fortran/trans-expr.c
+diff --git a/gcc-9.2.0/gcc/fortran/trans-expr.c b/gcc-9.2.0/gcc/fortran/trans-expr.c
 index afe08fc..482d6be 100644
 --- a/gcc-9.2.0/gcc/fortran/trans-expr.c
-+++ b/gcc-9.2.0-patched/gcc/fortran/trans-expr.c
++++ b/gcc-9.2.0/gcc/fortran/trans-expr.c
 @@ -3079,7 +3079,7 @@ gfc_conv_power_op (gfc_se * se, gfc_expr * expr)
        int kind, ikind, bit_size;
  
@@ -89,10 +89,10 @@ index afe08fc..482d6be 100644
  
        kind = expr->value.op.op1->ts.kind;
        ikind = gfc_validate_kind (BT_INTEGER, kind, false);
-diff --git a/gcc-9.2.0/libgfortran/intrinsics/random.c b/gcc-9.2.0-patched/libgfortran/intrinsics/random.c
+diff --git a/gcc-9.2.0/libgfortran/intrinsics/random.c b/gcc-9.2.0/libgfortran/intrinsics/random.c
 index 7476439..7677edf 100644
 --- a/gcc-9.2.0/libgfortran/intrinsics/random.c
-+++ b/gcc-9.2.0-patched/libgfortran/intrinsics/random.c
++++ b/gcc-9.2.0/libgfortran/intrinsics/random.c
 @@ -306,13 +306,6 @@ lcg_parkmiller(uint32_t seed)
  static int
  getosrandom (void *buf, size_t buflen)
@@ -115,10 +115,10 @@ index 7476439..7677edf 100644
  }
  
  
-diff --git a/gcc-9.2.0/libstdc++-v3/libsupc++/atexit_thread.cc b/gcc-9.2.0-patched/libstdc++-v3/libsupc++/atexit_thread.cc
+diff --git a/gcc-9.2.0/libstdc++-v3/libsupc++/atexit_thread.cc b/gcc-9.2.0/libstdc++-v3/libsupc++/atexit_thread.cc
 index 2533425..835a229 100644
 --- a/gcc-9.2.0/libstdc++-v3/libsupc++/atexit_thread.cc
-+++ b/gcc-9.2.0-patched/libstdc++-v3/libsupc++/atexit_thread.cc
++++ b/gcc-9.2.0/libstdc++-v3/libsupc++/atexit_thread.cc
 @@ -149,14 +149,6 @@ __cxxabiv1::__cxa_thread_atexit (void (*dtor)(void *), void *obj, void */*dso_ha
    new_elt->destructor = dtor;
    new_elt->object = obj;
@@ -134,10 +134,10 @@ index 2533425..835a229 100644
  
    if (__gthread_active_p ())
      __gthread_setspecific (key, new_elt);
-diff --git a/gcc-9.2.0/libstdc++-v3/libsupc++/del_opa.cc b/gcc-9.2.0-patched/libstdc++-v3/libsupc++/del_opa.cc
+diff --git a/gcc-9.2.0/libstdc++-v3/libsupc++/del_opa.cc b/gcc-9.2.0/libstdc++-v3/libsupc++/del_opa.cc
 index 73a600f..d60f747 100644
 --- a/gcc-9.2.0/libstdc++-v3/libsupc++/del_opa.cc
-+++ b/gcc-9.2.0-patched/libstdc++-v3/libsupc++/del_opa.cc
++++ b/gcc-9.2.0/libstdc++-v3/libsupc++/del_opa.cc
 @@ -50,7 +50,7 @@ operator delete(void* ptr, std::align_val_t) noexcept
      || _GLIBCXX_HAVE_MEMALIGN
    std::free (ptr);
@@ -147,10 +147,10 @@ index 73a600f..d60f747 100644
  #else
    if (ptr)
      std::free (((void **) ptr)[-1]); // See aligned_alloc in new_opa.cc
-diff --git a/gcc-9.2.0/libstdc++-v3/libsupc++/new_opa.cc b/gcc-9.2.0-patched/libstdc++-v3/libsupc++/new_opa.cc
+diff --git a/gcc-9.2.0/libstdc++-v3/libsupc++/new_opa.cc b/gcc-9.2.0/libstdc++-v3/libsupc++/new_opa.cc
 index 0303ecd..65cbded 100644
 --- a/gcc-9.2.0/libstdc++-v3/libsupc++/new_opa.cc
-+++ b/gcc-9.2.0-patched/libstdc++-v3/libsupc++/new_opa.cc
++++ b/gcc-9.2.0/libstdc++-v3/libsupc++/new_opa.cc
 @@ -49,7 +49,7 @@ using ::aligned_alloc;
  #elif _GLIBCXX_HAVE__ALIGNED_MALLOC
  static inline void*
@@ -160,10 +160,10 @@ index 0303ecd..65cbded 100644
  #elif _GLIBCXX_HAVE_POSIX_MEMALIGN
  static inline void*
  aligned_alloc (std::size_t al, std::size_t sz)
-diff --git a/gcc-9.2.0/libstdc++-v3/src/c++11/random.cc b/gcc-9.2.0-patched/libstdc++-v3/src/c++11/random.cc
+diff --git a/gcc-9.2.0/libstdc++-v3/src/c++11/random.cc b/gcc-9.2.0/libstdc++-v3/src/c++11/random.cc
 index 0bb6b6b..c8212fb 100644
 --- a/gcc-9.2.0/libstdc++-v3/src/c++11/random.cc
-+++ b/gcc-9.2.0-patched/libstdc++-v3/src/c++11/random.cc
++++ b/gcc-9.2.0/libstdc++-v3/src/c++11/random.cc
 @@ -91,18 +91,6 @@ namespace std _GLIBCXX_VISIBILITY(default)
        return val;
      }
@@ -195,6 +195,6 @@ index 0bb6b6b..c8212fb 100644
    }
  
    double
-diff --git a/gcc-9.2.0-patched/out b/gcc-9.2.0-patched/out
+diff --git a/gcc-9.2.0/out b/gcc-9.2.0/out
 new file mode 100644
 index 0000000..e69de29
